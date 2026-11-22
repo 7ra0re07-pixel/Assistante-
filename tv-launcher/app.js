@@ -78,6 +78,16 @@
   }
   applyTheme(prefs.theme);
   applyDisplay();
+  // Détection : flexbox avec « gap » (absent avant Chrome 84) → marges de repli en CSS
+  (function detectFlexGap() {
+    const d = document.createElement('div');
+    d.style.cssText = 'display:flex;flex-direction:column;row-gap:1px;position:absolute;visibility:hidden';
+    d.appendChild(document.createElement('div')); d.appendChild(document.createElement('div'));
+    document.body.appendChild(d);
+    const ok = d.scrollHeight === 1;
+    d.remove();
+    root.classList.toggle('no-flexgap', !ok);
+  })();
 
   /* ---------- Applis installées sur la TV (appli Android uniquement) ---------- */
   const hasBridge = () => !!(window.AndroidTV && typeof window.AndroidTV.launchApp === 'function');
@@ -510,25 +520,46 @@
     scrollTo();
   }
 
+  // Défilement : l'élément sélectionné reste entièrement visible, avec une marge de 10 % en haut et en bas.
+  // Tout est calculé à partir des positions des rangées (pas de scrollHeight, peu fiable sur certaines TV).
+  const STAGE_W = 1920, STAGE_H = 1080, MARGIN_Y = 108, TOP_BAR = 170, SIDE = 96;
+  let scrollY = 0;
   function scrollTo() {
     const row = NAV[r];
-    if (row.track) { // horizontal : la tuile reste dans la zone de sécurité
-      const t = row.items[c], SAFE = 96, W = 1920;
-      const left = t.offsetLeft, right = left + t.offsetWidth;
+    if (row && row.track) { // horizontal : toute la tuile (agrandie et son halo) dans l'écran
+      const t = row.items[c];
+      const grow = Math.round(t.offsetWidth * 0.045) + 14;
+      const left = t.offsetLeft - grow, right = t.offsetLeft + t.offsetWidth + grow;
       const last = row.items[row.items.length - 1];
-      const max = Math.max(0, last.offsetLeft + last.offsetWidth + SAFE - W);
-      if (right - row.offset > W - SAFE) row.offset = right - (W - SAFE);
-      if (left - row.offset < SAFE) row.offset = left - SAFE;
+      const max = Math.max(0, last.offsetLeft + last.offsetWidth + grow + SIDE - STAGE_W);
+      if (right - row.offset > STAGE_W - SIDE) row.offset = right - (STAGE_W - SIDE);
+      if (left - row.offset < SIDE) row.offset = left - SIDE;
       row.offset = Math.max(0, Math.min(max, row.offset));
       row.track.style.transform = `translateX(${-row.offset}px)`;
     }
-    let y = 0; // vertical : la bannière s'efface sous la première rangée
-    const deep = r > FIRST();
-    if (deep) y = Math.max(0, Math.min(row.el.offsetTop - 190, $('scroller').scrollHeight - 1080));
+    // vertical
+    let y = scrollY;
+    if (r <= HERO() || r === 0 || !row || !row.track) y = 0;
+    else {
+      const t = row.items[c];
+      const growY = Math.round(t.offsetHeight * 0.045) + 14;
+      const top = row.el.offsetTop;                                            // titre de la rangée compris
+      const bottom = row.track.offsetTop + t.offsetTop + t.offsetHeight + growY + 30;
+      const minTop = Math.max(TOP_BAR + 20, MARGIN_Y), maxBottom = STAGE_H - MARGIN_Y;
+      if (bottom - y > maxBottom) y = bottom - maxBottom;
+      if (top - y < minTop) y = top - minTop;
+      const lastRow = ROWS[ROWS.length - 1];
+      const contentH = lastRow ? lastRow.el.offsetTop + lastRow.el.offsetHeight + 140 : STAGE_H;
+      y = Math.max(0, Math.min(y, Math.max(0, contentH - STAGE_H)));
+      if (r === FIRST() && prefs.banner && bottom <= maxBottom) y = 0; // première rangée : la bannière reste visible
+    }
+    scrollY = y;
     $('scroller').style.transform = `translateY(${-y}px)`;
-    ROWS.forEach(rw => { rw.el.style.opacity = rw.el.offsetTop + rw.el.offsetHeight - y < 260 ? 0 : 1; });
+    // une rangée qui passe sous la barre du haut s'efface (pas de logos derrière l'horloge)
+    ROWS.forEach(rw => { rw.el.style.opacity = y > 0 && rw.el.offsetTop - y < TOP_BAR - 20 ? 0 : 1; });
+    const deep = y > 120;
     $('hero').style.opacity = deep ? 0 : 1;
-    $('stage').classList.toggle('scrolled', deep);
+    $('stage').classList.toggle('scrolled', y > 0);
   }
 
   function move(dir) {
@@ -613,7 +644,10 @@
     $('detailsTitle').textContent = item.title; $('detailsDesc').textContent = item.desc;
     openLayer('details', 'details');
   }
-  function openWeather() { sound('select'); openLayer('weatherPanel', 'weather'); renderWeatherPanel(); }
+  function openWeather() {
+    sound('select'); openLayer('weatherPanel', 'weather'); renderWeatherPanel();
+    if (!wx || Date.now() - wx.at > 30 * 60000) updateWeather(); // prévisions récentes (la fenêtre se met à jour)
+  }
 
   // Réseau : nom du Wi-Fi, force du signal, état d'Internet et raccourci vers les réglages de la TV
   let netIdx = 0;
@@ -916,6 +950,8 @@
         if (hasBridge() && (upd.state === 'available' || upd.state === 'needperm' || upd.state === 'error' && upd.remote))
           entries.push({ label: `Installer la version ${upd.remote.versionName}`, cls: 'primary', value: '', ok: installUpdate });
         if (hasBridge()) entries.push({ label: 'Paramètres Android de la TV', value: '›', ok: () => window.AndroidTV.openSystemSettings() });
+        const engine = (navigator.userAgent.match(/Chrome\/(\d+)/) || [])[1];
+        if (engine) entries.push({ label: 'Moteur web de la TV', value: `Chrome ${engine}`, cls: 'info' });
         entries.push({ label: 'Photos des fonds d’écran', value: 'Unsplash, licence libre', cls: 'info' });
         return { title: 'À propos', hint: 'OK sur « Rechercher une mise à jour » pour vérifier la dernière version.', entries };
       }
@@ -1112,12 +1148,23 @@
         def.onInput && def.onInput();
       });
     });
-    // garde la ligne sélectionnée visible dans la liste
-    const ul = $('settingsList'), li = ul.querySelector('.focused, .grab');
-    if (li) {
-      if (li.offsetTop - 60 < ul.scrollTop) ul.scrollTop = Math.max(0, li.offsetTop - 60);
-      else if (li.offsetTop + li.offsetHeight + 12 > ul.scrollTop + ul.clientHeight) ul.scrollTop = li.offsetTop + li.offsetHeight + 12 - ul.clientHeight;
-    }
+    keepSettingVisible();
+  }
+  // Garde la ligne sélectionnée entièrement visible (10 % de marge), jusqu'au dernier élément
+  function keepSettingVisible() {
+    const ul = $('settingsList'), hint = $('settingsHint');
+    // hauteur disponible : de la liste jusqu'au texte d'aide (sans dépendre de flexbox)
+    const avail = Math.max(200, hint.offsetTop - ul.offsetTop - 16);
+    ul.style.height = avail + 'px';
+    const li = ul.querySelector('.focused, .grab');
+    if (!li) return;
+    const margin = Math.round(avail * 0.1);
+    const top = li.offsetTop, bottom = top + li.offsetHeight; // position dans la liste (qui sert de repère)
+    let st = ul.scrollTop;
+    if (bottom + margin > st + avail) st = bottom + margin - avail;
+    if (top - margin < st) st = top - margin;
+    const maxSt = Math.max(0, ul.scrollHeight - avail);
+    ul.scrollTop = Math.max(0, Math.min(maxSt, st));
   }
 
   function settingsKey(k) {
