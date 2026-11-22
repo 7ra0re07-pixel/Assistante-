@@ -78,9 +78,11 @@
     const t = el('button', 'tile tile-app focusable');
     t.style.setProperty('--tc1', a.colors[0]); t.style.setProperty('--tc2', a.colors[1]); t.style.setProperty('--tc3', a.colors[2]);
     t.style.setProperty('--logo', a.logoColor);
-    t.innerHTML = `<span class="app-bg" style="background-image:url(${a.icon})"></span>
-      <img class="app-icon" src="${a.icon}" alt="" draggable="false">
-      <span class="app-label">${a.name}</span>`;
+    // Logo officiel (SVG) quand il existe, sinon logo dessiné en CSS (Netflix, YouTube, Canal+)
+    const logo = a.logo
+      ? `<img class="app-logo-img app-logo-${a.id}" src="${a.logo}" alt="" draggable="false">`
+      : `<span class="app-logo ${a.logoStyle}">${a.logoStyle === 'play' ? '<span class="play"></span>' : ''}${a.name}</span>`;
+    t.innerHTML = logo;
     t.setAttribute('aria-label', a.name);
     t._item = { kind: 'app', title: a.name, source: a.id, desc: a.desc, tags: [], colors: a.colors, action: 'Ouvrir' };
     return t;
@@ -167,7 +169,8 @@
     if (row.track) {
       const t = row.items[c], SAFE = 96, W = 1920;
       const left = t.offsetLeft, right = left + t.offsetWidth;
-      const max = Math.max(0, row.track.scrollWidth - W);
+      const last = row.items[row.items.length - 1];
+      const max = Math.max(0, last.offsetLeft + last.offsetWidth + SAFE - W);
       if (right - row.offset > W - SAFE) row.offset = right - (W - SAFE);
       if (left - row.offset < SAFE) row.offset = left - SAFE;
       row.offset = Math.max(0, Math.min(max, row.offset));
