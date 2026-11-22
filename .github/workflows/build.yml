@@ -77,5 +77,8 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
         with:
           path: tv-launcher
+      # GitHub met parfois quelques secondes à rendre l'archive du site visible
+      - name: Attendre l'archive du site
+        run: sleep 20
       - id: deployment
         uses: actions/deploy-pages@v4
