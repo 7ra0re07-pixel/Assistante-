@@ -36,6 +36,9 @@
       .reduce((acc, v, i) => acc + v * [0.2126, 0.7152, 0.0722][i], 0);
   }
   function customApp(c) {
+    if (c.installed) return { id: c.id, custom: true, installed: true, name: c.name, package: c.package, url: '',
+      color: c.color, kind: c.kind || 'video', colors: [c.color, shade(c.color, -0.35), shade(c.color, -0.7)],
+      textColor: '#FFFFFF', desc: 'Appli installée sur cette TV.' };
     return { id: c.id, custom: true, name: c.name, url: c.url || '', package: c.package || '', color: c.color,
       kind: c.kind || 'video', colors: [c.color, c.color, shade(c.color, -0.55)],
       textColor: luminance(c.color) > 0.45 ? '#111111' : '#FFFFFF',
@@ -60,6 +63,24 @@
   normalizeLib();
   const saveLib = () => save('tv.library', lib);
   const appsInRow = (key) => lib.items.filter(it => it.row === key).map(it => getApp(it.id));
+
+  /* ---------- Applis installées sur la TV (appli Android uniquement) ---------- */
+  const hasBridge = () => !!(window.AndroidTV && typeof window.AndroidTV.launchApp === 'function');
+  let installed = [], installedMap = {}, installedSig = '';
+  function refreshInstalled() {
+    if (!hasBridge() || typeof window.AndroidTV.getInstalledApps !== 'function') return false;
+    try {
+      const list = JSON.parse(window.AndroidTV.getInstalledApps());
+      const sig = list.map(x => x.package).join(',');
+      const changed = sig !== installedSig;
+      installed = list; installedSig = sig;
+      installedMap = Object.fromEntries(list.map(x => [x.package, x]));
+      return changed;
+    } catch { return false; }
+  }
+  const pkgsOf = (a) => (a.packages && a.packages.length ? a.packages : [a.package]).filter(Boolean);
+  const isInstalled = (a) => pkgsOf(a).some(p => installedMap[p]);
+  refreshInstalled();
 
   /* ---------- Mise à l'échelle 16:9 ---------- */
   function fit() { document.documentElement.style.setProperty('--scale', Math.min(innerWidth / 1920, innerHeight / 1080)); }
@@ -210,6 +231,11 @@
   // Logo officiel (SVG) quand il existe, sinon logo dessiné en CSS (Netflix, YouTube)
   const esc = (t) => String(t).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
   function logoHTML(a) {
+    if (a.installed) {
+      const info = installedMap[a.package];
+      if (info && info.banner) return `<img class="app-banner" src="${info.banner}" alt="" draggable="false">`;
+      if (info && info.icon) return `<span class="app-inst"><img src="${info.icon}" alt="" draggable="false"><span>${esc(a.name)}</span></span>`;
+    }
     if (a.custom) return `<span class="app-logo custom" style="--logo:${a.textColor}">${esc(a.name)}</span>`;
     return a.logo
       ? `<img class="app-logo-img app-logo-${a.id}" src="${a.logo}" alt="" draggable="false" data-name="${esc(a.name)}" onerror="tvLogoFallback(this)">`
@@ -387,7 +413,6 @@
 
   /* ---------- Ouverture des applis ---------- */
   const isAndroid = /Android/i.test(navigator.userAgent);
-  const hasBridge = () => window.AndroidTV && typeof window.AndroidTV.launchApp === 'function';
 
   // Site de secours : le site de l'appli, sinon sa page sur le Play Store
   const webUrl = (a) => a.url || `https://play.google.com/store/apps/details?id=${encodeURIComponent(a.package)}`;
@@ -400,9 +425,11 @@
   function launch(a, item) {
     sound('select');
     const what = item.kind === 'app' ? a.name : `${item.title} dans ${a.name}`;
-    if (hasBridge() && a.package) { // lanceur Android (WebView) : ouverture native
-      toast(`Ouverture de ${what}`);
-      if (!window.AndroidTV.launchApp(a.package)) toast(`${a.name} n'est pas installée sur cette TV`);
+    if (hasBridge()) { // appli Android : ouverture native
+      const pkgs = pkgsOf(a);
+      if (pkgs.length && window.AndroidTV.launchApp(pkgs.join(','))) return toast(`Ouverture de ${what}`);
+      if (a.url && (a.custom || !pkgs.length)) { toast(`Ouverture de ${a.name}`); return window.AndroidTV.openUrl(a.url); }
+      if (pkgs.length) { toast(`${a.name} n'est pas installée sur cette TV. Ouverture du Play Store.`); return window.AndroidTV.openStore(pkgs[0]); }
       return;
     }
     if (prefs.openApps && isAndroid && a.package) {
@@ -454,13 +481,14 @@
     { label: 'Ajouter une appli', value: () => '›', go: 'add' },
     { label: 'Ville pour la météo', value: () => `‹ ${city().name} ›`,
       step: (d) => { prefs.cityIndex = (prefs.cityIndex + d + D.cities.length) % D.cities.length; updateWeather(); } },
-    { label: 'Ouvrir les applis installées', toggle: 'openApps' },
+    { label: 'Paramètres de la TV', value: () => '›', show: () => hasBridge(), act: () => window.AndroidTV.openSystemSettings() },
+    { label: 'Ouvrir les applis installées', toggle: 'openApps', show: () => !hasBridge() },
     { label: 'Sons de navigation', toggle: 'sounds' },
     { label: 'Mise en veille', value: () => `‹ ${sleepLabel()} ›`,
       step: (d) => { prefs.sleepMin = cycle(SLEEP_CHOICES, prefs.sleepMin, d); resetIdle(); } },
     { label: 'Heure sur 24 h', toggle: 'h24', after: tick },
     { label: 'Réduire les animations', toggle: 'reduceMotion', after: applyMotion },
-    { label: 'Plein écran', value: () => document.fullscreenElement ? 'Activé' : 'Désactivé',
+    { label: 'Plein écran', show: () => !hasBridge(), value: () => document.fullscreenElement ? 'Activé' : 'Désactivé',
       step: () => {
         const pr = document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.();
         Promise.resolve(pr).catch(() => toast('Plein écran indisponible dans ce navigateur')).finally(() => setTimeout(renderSettings, 300));
@@ -537,11 +565,11 @@
     switch (nav.page) {
       case 'main': return {
         title: 'Paramètres', hint: 'Flèches pour choisir, OK pour modifier, Retour pour fermer.',
-        entries: MAIN.map(m => ({
+        entries: MAIN.filter(m => !m.show || m.show()).map(m => ({
           label: m.label, value: m.toggle ? switchHTML(prefs[m.toggle]) : m.value(),
-          ok: () => m.go ? go(m.go) : mainStep(m, 1),
-          right: m.go ? () => go(m.go) : () => mainStep(m, 1),
-          left: m.go || m.toggle ? null : () => mainStep(m, -1)
+          ok: () => m.act ? m.act() : m.go ? go(m.go) : mainStep(m, 1),
+          right: m.act ? null : m.go ? () => go(m.go) : () => mainStep(m, 1),
+          left: m.go || m.toggle || m.act ? null : () => mainStep(m, -1)
         }))
       };
       case 'manage': {
@@ -580,17 +608,41 @@
           ] };
       }
       case 'add': {
-        const available = BUILTIN.filter(a => !lib.items.some(it => it.id === a.id));
+        const available = BUILTIN.filter(a => !lib.items.some(it => it.id === a.id))
+          .sort((x, y) => isInstalled(y) - isInstalled(x)); // applis présentes sur la TV en premier
         const entries = [{ label: 'Appli personnalisée', value: 'Créer ›', cls: 'special', ok: () => go('custom') }];
+        if (hasBridge()) {
+          // applis de la TV qui ne sont ni sur l'accueil ni dans la liste des applis populaires
+          const known = new Set([...BUILTIN.flatMap(pkgsOf), ...lib.items.map(it => getApp(it.id)).flatMap(pkgsOf)]);
+          const others = installed.filter(x => !known.has(x.package));
+          entries.push({ header: true, label: others.length ? 'Installées sur cette TV' : 'Toutes les applis de la TV sont déjà sur l’accueil ou dans la liste ci-dessous.' });
+          others.forEach(x => {
+            const a = installedAsApp(x);
+            entries.push({ label: `${mini(a)}<span>${esc(a.name)}</span>`, value: 'Installée',
+              ok: () => { target = 'inst:' + x.package; go('addRow', 0); } });
+          });
+        }
         entries.push({ header: true, label: available.length ? 'Applis populaires' : 'Toutes les applis de la liste sont déjà sur l’accueil.' });
-        available.forEach(a => entries.push({ label: `${mini(a)}<span>${esc(a.name)}</span>`, value: a.kind === 'music' ? 'Musique' : 'Films & séries',
+        available.forEach(a => entries.push({ label: `${mini(a)}<span>${esc(a.name)}</span>`,
+          value: hasBridge() && isInstalled(a) ? 'Installée' : a.kind === 'music' ? 'Musique' : 'Films & séries',
           ok: () => { target = a.id; go('addRow', ROW_KEYS.indexOf(a.kind === 'music' ? 'musique' : 'films')); } }));
         return { title: 'Ajouter une appli', hint: 'OK pour ajouter, Retour pour revenir.', entries };
       }
       case 'addRow': {
-        const a = getApp(target), suggested = a.kind === 'music' ? 'musique' : 'films';
+        const inst = target.startsWith('inst:') ? installedMap[target.slice(5)] : null;
+        const a = inst ? installedAsApp(inst) : getApp(target);
+        if (!a) return { title: 'Ajouter une appli', hint: '', entries: [] };
+        const suggested = inst ? 'favoris' : a.kind === 'music' ? 'musique' : 'films';
+        const confirm = (row) => {
+          let id = target;
+          if (inst) { // appli de la TV : on la mémorise avec son nom et sa couleur
+            id = 'inst-' + inst.package;
+            if (!lib.custom.some(c => c.id === id)) lib.custom.push({ id, installed: true, name: inst.name, package: inst.package, color: inst.color || '#2A3550', kind: 'video' });
+          }
+          addApp(id, row); goBack();
+        };
         return { title: `Ajouter ${a.name}`, hint: 'Choisissez la rangée où placer l’appli.',
-          entries: ROW_DEFS.map(d => ({ label: d.title, value: d.key === suggested ? 'Suggérée' : '', ok: () => { addApp(target, d.key); goBack(); } })) };
+          entries: ROW_DEFS.map(d => ({ label: d.title, value: d.key === suggested ? 'Suggérée' : '', ok: () => confirm(d.key) })) };
       }
       case 'custom': return {
         title: 'Appli personnalisée', preview: true,
@@ -607,6 +659,7 @@
       };
     }
   }
+  const installedAsApp = (x) => customApp({ id: 'inst-' + x.package, installed: true, name: x.name, package: x.package, color: x.color || '#2A3550' });
   function mainStep(m, d) {
     if (m.toggle) { prefs[m.toggle] = !prefs[m.toggle]; m.after && m.after(); }
     else m.step(d);
@@ -615,6 +668,7 @@
   function focusField(f) {
     const inp = $('cust-' + f); if (!inp) return;
     inp.focus(); const n = inp.value.length; try { inp.setSelectionRange(n, n); } catch { /* ignoré */ }
+    if (hasBridge() && typeof window.AndroidTV.showKeyboard === 'function') window.AndroidTV.showKeyboard();
   }
   function updatePreview() {
     const pv = $('settingsPreview');
@@ -869,6 +923,25 @@
   }, { passive: true }));
   $('saver').addEventListener('click', stopSaver);
   $('splash').addEventListener('click', endSplash);
+
+  // Bouton Home de la télécommande : retour en haut de l'accueil
+  window.tvGoHome = () => {
+    if (saverOn) stopSaver();
+    if (splashOn) endSplash();
+    document.activeElement?.blur?.();
+    if (layer === 'settings') closeSettings();
+    else if (layer === 'details') closeLayer('details');
+    else if (layer === 'weather') closeLayer('weatherPanel');
+    focus(1, 0, false);
+  };
+  // Retour dans le lanceur : la liste des applis installées a pu changer
+  window.tvOnResume = () => {
+    if (!refreshInstalled()) return;
+    if (layer === 'settings') renderSettings();
+    buildRows(); r = Math.min(r, NAV.length - 1);
+    if (layer === 'home') focus(r, Math.min(c, NAV[r].items.length - 1), false);
+  };
+  window.tvToast = (msg) => toast(msg);
 
   // Retour depuis une appli ouverte : on reprend la bannière et la veille
   document.addEventListener('visibilitychange', () => {

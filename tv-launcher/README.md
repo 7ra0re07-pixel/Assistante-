@@ -23,4 +23,4 @@ entièrement à la télécommande.
   touche ramène l'accueil. Pour l'essayer tout de suite : `?veille`.
 - Prénom de l'écran de démarrage : `userName` dans `data.js`.
 - Météo : Open-Meteo, sans clé. La ville se choisit dans les paramètres.
-- Passage en lanceur Android TV : voir [ANDROID_TV.md](ANDROID_TV.md).
+- Appli Android TV (APK) : voir [ANDROID_TV.md](ANDROID_TV.md) et le guide d'installation `INSTALLATION_TV.md`.

@@ -1,0 +1,81 @@
+name: Compiler l'APK et publier l'accueil TV
+
+on:
+  push:
+    branches: [main]
+    paths: ['tv-launcher/**', 'android/**', '.github/workflows/build.yml']
+  workflow_dispatch:
+
+concurrency:
+  group: build-and-pages
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    name: Compiler l'APK Android TV
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # pour publier l'APK dans la release « apk »
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.14.3'
+
+      - name: Compiler
+        run: gradle -p android assembleRelease --no-daemon
+
+      - name: Renommer l'APK
+        run: cp android/app/build/outputs/apk/release/app-release.apk AccueilTV.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apk
+          path: AccueilTV.apk
+
+      - name: Publier dans la release « apk »
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: apk
+          name: Accueil TV (dernière version)
+          body: |
+            APK de l'écran d'accueil Android TV, compilé automatiquement (version 1.${{ github.run_number }}).
+            Lien direct : https://github.com/${{ github.repository }}/releases/download/apk/AccueilTV.apk
+          files: AccueilTV.apk
+          make_latest: true
+
+  pages:
+    name: Publier le site (et l'APK) sur GitHub Pages
+    needs: apk
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: apk
+          path: apk
+
+      # Adresse courte à taper dans Downloader : <site>/tv.apk
+      - name: Ajouter l'APK au site
+        run: cp apk/AccueilTV.apk tv-launcher/tv.apk
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: tv-launcher
+      - id: deployment
+        uses: actions/deploy-pages@v4

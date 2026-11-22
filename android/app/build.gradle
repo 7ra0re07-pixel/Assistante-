@@ -1,0 +1,65 @@
+plugins {
+    id 'com.android.application'
+}
+
+// Numéro de version : numéro de compilation GitHub Actions (1 en local).
+// Il augmente à chaque compilation, ce qui permet d'installer une mise à jour par-dessus.
+def buildNumber = (System.getenv('GITHUB_RUN_NUMBER') ?: '1') as int
+
+android {
+    namespace 'com.accueiltv.launcher'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'com.accueiltv.launcher'
+        minSdk 21
+        targetSdk 35
+        versionCode buildNumber
+        versionName "1.${buildNumber}"
+    }
+
+    // Clé de signature fixe : chaque nouvelle version s'installe par-dessus la précédente
+    // sans effacer vos réglages (favoris, applis ajoutées…).
+    signingConfigs {
+        stable {
+            storeFile file('../signing/accueiltv.keystore')
+            storePassword 'accueiltv'
+            keyAlias 'accueiltv'
+            keyPassword 'accueiltv'
+        }
+    }
+
+    buildTypes {
+        debug {
+            signingConfig signingConfigs.stable
+        }
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.stable
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    // L'interface web (dossier tv-launcher) est copiée dans l'appli à chaque compilation
+    sourceSets {
+        main {
+            assets.srcDirs += ["$buildDir/generated/webassets"]
+        }
+    }
+}
+
+def copyWebAssets = tasks.register('copyWebAssets', Sync) {
+    from(rootProject.file('../tv-launcher')) {
+        exclude '*.md', '*.apk'
+    }
+    into("$buildDir/generated/webassets/www")
+}
+tasks.named('preBuild') { dependsOn copyWebAssets }
+
+dependencies {
+    implementation 'androidx.webkit:webkit:1.12.1'
+}

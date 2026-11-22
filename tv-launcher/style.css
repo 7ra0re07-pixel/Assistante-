@@ -363,3 +363,14 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .app-logo-tf1plus { width: 240px; }
 .hero-logo .app-logo-m6plus { background: #F4F4F6; padding: 12px 26px; border-radius: 22px; box-sizing: content-box; height: 120px; }
 .app-logo-applemusic { width: 250px; }
+
+/* ---------- Applis installées sur la TV : bannière officielle ou icône ---------- */
+.tile-app .app-banner { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.mini .app-banner { width: 100%; height: 100%; object-fit: cover; }
+.hero-logo .app-banner { height: 150px; width: auto; border-radius: 18px; box-shadow: 0 12px 40px rgba(0,0,0,.45); }
+.app-inst { display: flex; flex-direction: column; align-items: center; gap: 10px; font-family: var(--display); font-size: 26px; font-weight: 600; color: #fff; text-shadow: 0 2px 10px rgba(0,0,0,.5); }
+.app-inst img { width: 96px; height: 96px; border-radius: 22px; }
+.mini .app-inst img { width: 40px; height: 40px; border-radius: 10px; }
+.mini .app-inst span { display: none; }
+.hero-logo .app-inst { flex-direction: row; gap: 28px; font-size: 96px; letter-spacing: -.03em; }
+.hero-logo .app-inst img { width: 140px; height: 140px; border-radius: 32px; }
