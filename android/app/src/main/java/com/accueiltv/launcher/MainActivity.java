@@ -71,9 +71,15 @@ public class MainActivity extends Activity {
         s.setMediaPlaybackRequiresUserGesture(false);
         s.setAllowFileAccess(false);
         s.setAllowContentAccess(false);
+        // Taille de page fixe : 1 pixel CSS = 1 dp de l'écran, aucun zoom automatique.
+        // (La vue « large » + « vue d'ensemble » zoomait la page sur certaines TV : elle débordait.)
+        // L'interface se met ensuite elle-même à l'échelle de l'écran (fonction fit() de app.js).
         s.setTextZoom(100);
-        s.setUseWideViewPort(true);
-        s.setLoadWithOverviewMode(true);
+        s.setUseWideViewPort(false);
+        s.setLoadWithOverviewMode(false);
+        s.setSupportZoom(false);
+        s.setBuiltInZoomControls(false);
+        s.setDisplayZoomControls(false);
 
         web.setWebChromeClient(new WebChromeClient());
         web.setWebViewClient(new WebViewClient() {
@@ -346,6 +352,22 @@ public class MainActivity extends Activity {
                 InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
                 if (imm != null) imm.showSoftInput(web, InputMethodManager.SHOW_IMPLICIT);
             });
+        }
+
+        /** Taille réelle de l'écran et densité, pour le diagnostic (Paramètres → Écran). */
+        @JavascriptInterface
+        public String displayInfo() {
+            try {
+                android.util.DisplayMetrics m = getResources().getDisplayMetrics();
+                JSONObject o = new JSONObject();
+                o.put("widthPx", web.getWidth() > 0 ? web.getWidth() : m.widthPixels);
+                o.put("heightPx", web.getHeight() > 0 ? web.getHeight() : m.heightPixels);
+                o.put("density", m.density);
+                o.put("dpi", m.densityDpi);
+                return o.toString();
+            } catch (Exception e) {
+                return "{}";
+            }
         }
 
         @JavascriptInterface

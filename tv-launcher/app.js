@@ -10,7 +10,7 @@
   /* ---------- Préférences enregistrées ---------- */
   function load(k, def) { try { return JSON.parse(localStorage.getItem(k)) ?? def; } catch { return def; } }
   function save(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* stockage indisponible */ } }
-  const prefs = Object.assign({ cityIndex: 0, h24: true, reduceMotion: false, sounds: true, openApps: true, sleepMin: 3 }, load('tv.prefs', {}));
+  const prefs = Object.assign({ cityIndex: 0, h24: true, reduceMotion: false, sounds: true, openApps: true, sleepMin: 3, displayScale: 100 }, load('tv.prefs', {}));
   const savePrefs = () => save('tv.prefs', prefs);
 
   /* ---------- Bibliothèque d'applis (enregistrée) ---------- */
@@ -83,8 +83,21 @@
   refreshInstalled();
 
   /* ---------- Mise à l'échelle 16:9 ---------- */
-  function fit() { document.documentElement.style.setProperty('--scale', Math.min(innerWidth / 1920, innerHeight / 1080)); }
-  addEventListener('resize', fit); fit();
+  // La scène fait 1920×1080 ; on la réduit pour tenir entièrement dans l'écran, puis on la centre.
+  // « Taille de l'affichage » (paramètres) la réduit encore si la TV rogne les bords (overscan).
+  function fit() {
+    const de = document.documentElement;
+    const W = de.clientWidth || innerWidth, H = de.clientHeight || innerHeight;
+    if (!W || !H) return;
+    const s = Math.min(W / 1920, H / 1080) * (prefs.displayScale || 100) / 100;
+    de.style.setProperty('--scale', s.toFixed(5));
+    de.style.setProperty('--tx', ((W - 1920 * s) / 2).toFixed(1) + 'px');
+    de.style.setProperty('--ty', ((H - 1080 * s) / 2).toFixed(1) + 'px');
+  }
+  addEventListener('resize', fit);
+  if (window.visualViewport) visualViewport.addEventListener('resize', fit);
+  addEventListener('load', fit);
+  fit(); setTimeout(fit, 300); setTimeout(fit, 1500); // la TV peut donner sa taille définitive un peu après
 
   /* ---------- Sons de navigation (générés, aucun fichier) ---------- */
   let actx = null;
@@ -476,6 +489,13 @@
   const mini = (a) => `<span class="mini" style="--tc2:${a.colors[1]};--tc3:${a.colors[2]}">${logoHTML(a)}</span>`;
   const cycle = (list, cur, d) => list[(list.indexOf(cur) + d + list.length) % list.length];
 
+  const DISPLAY_SCALES = [80, 85, 90, 95, 100];
+  function screenInfo() {
+    try {
+      const d = JSON.parse(window.AndroidTV.displayInfo());
+      return `${d.widthPx} × ${d.heightPx} px, densité ${String(Math.round(d.density * 100) / 100).replace('.', ',')}`;
+    } catch { return ''; }
+  }
   const MAIN = [
     { label: 'Mes applis', value: () => `${lib.items.length} ›`, go: 'manage' },
     { label: 'Ajouter une appli', value: () => '›', go: 'add' },
@@ -486,6 +506,9 @@
     { label: 'Sons de navigation', toggle: 'sounds' },
     { label: 'Mise en veille', value: () => `‹ ${sleepLabel()} ›`,
       step: (d) => { prefs.sleepMin = cycle(SLEEP_CHOICES, prefs.sleepMin, d); resetIdle(); } },
+    { label: 'Taille de l’affichage', value: () => `‹ ${prefs.displayScale || 100} % ›`,
+      step: (d) => { prefs.displayScale = cycle(DISPLAY_SCALES, prefs.displayScale || 100, d); fit(); } },
+    { label: 'Écran', show: () => hasBridge() && typeof window.AndroidTV.displayInfo === 'function', value: () => screenInfo(), act: () => {} },
     { label: 'Heure sur 24 h', toggle: 'h24', after: tick },
     { label: 'Réduire les animations', toggle: 'reduceMotion', after: applyMotion },
     { label: 'Plein écran', show: () => !hasBridge(), value: () => document.fullscreenElement ? 'Activé' : 'Désactivé',

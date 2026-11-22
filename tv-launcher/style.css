@@ -41,10 +41,10 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 
 /* ---------- Scène 1920×1080 mise à l'échelle ---------- */
 .stage {
-  position: absolute; left: 50%; top: 50%;
+  position: absolute; left: 0; top: 0;
   transition: opacity 900ms ease, transform 900ms var(--ease);
   width: 1920px; height: 1080px;
-  transform-origin: center; transform: translate(-50%, -50%) scale(var(--scale, 1));
+  transform-origin: 0 0; transform: translate(var(--tx, 0px), var(--ty, 0px)) scale(var(--scale, 1));
   overflow: hidden;
 }
 
@@ -172,7 +172,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 
 /* ---------- Panneau paramètres ---------- */
 .settings {
-  position: fixed; z-index: 20; top: 0; right: 0; bottom: 0; width: 680px;
+  position: fixed; z-index: 20; top: calc(var(--ty, 0px) / var(--scale, 1)); right: calc(var(--tx, 0px) / var(--scale, 1)); bottom: calc(var(--ty, 0px) / var(--scale, 1)); width: 680px;
   padding: 64px 56px 48px; display: flex; flex-direction: column; background: rgba(14,19,34,.96); backdrop-filter: blur(20px);
   box-shadow: -30px 0 80px rgba(0,0,0,.6);
   transform: translateX(105%); transition: transform 380ms var(--ease);
@@ -242,7 +242,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 
 /* ---------- Toast ---------- */
 .toast {
-  position: fixed; z-index: 30; left: 50%; bottom: 64px; transform: translate(-50%, 30px);
+  position: fixed; z-index: 30; left: 50%; bottom: calc(64px + var(--ty, 0px) / var(--scale, 1)); transform: translate(-50%, 30px);
   padding: 22px 40px; border-radius: 40px; background: var(--ink); color: var(--night);
   font-size: 30px; font-weight: 600; opacity: 0; transition: opacity 250ms, transform 300ms var(--ease);
   box-shadow: 0 20px 60px rgba(0,0,0,.5);
@@ -325,7 +325,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 @keyframes kb { from { transform: scale(1) translate(0, 0); } to { transform: scale(1.1) translate(-2.5%, -1.5%); } }
 @keyframes kb2 { from { transform: scale(1.1) translate(2%, -1%); } to { transform: scale(1) translate(0, 0); } }
 .saver::after { content: ''; position: absolute; inset: 0; background: linear-gradient(20deg, rgba(0,0,0,.55) 0%, rgba(0,0,0,.1) 45%, transparent 70%); pointer-events: none; }
-.saver-info { position: absolute; z-index: 1; left: 120px; bottom: 110px; zoom: var(--scale, 1); text-shadow: 0 4px 30px rgba(0,0,0,.45);
+.saver-info { position: absolute; z-index: 1; left: calc(120px + var(--tx, 0px) / var(--scale, 1)); bottom: calc(110px + var(--ty, 0px) / var(--scale, 1)); zoom: var(--scale, 1); text-shadow: 0 4px 30px rgba(0,0,0,.45);
   animation: wander 900s ease-in-out infinite alternate; }
 @keyframes wander { 0% { transform: translate(0, 0); } 33% { transform: translate(780px, -40px); } 66% { transform: translate(360px, -420px); } 100% { transform: translate(1000px, -380px); } }
 .saver-time { font-family: var(--display); font-size: 220px; font-weight: 600; line-height: .95; letter-spacing: -.045em; font-variant-numeric: tabular-nums; }
@@ -338,11 +338,11 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   background: radial-gradient(110% 90% at 75% 15%, #1C2B4C 0%, var(--night) 62%);
   transition: opacity 800ms ease, visibility 0s 800ms; }
 .splash.out { opacity: 0; visibility: hidden; }
-.splash-greeting, .splash-sub { zoom: var(--scale, 1); padding-left: 160px; opacity: 0; transform: translateY(26px); animation: rise 1000ms var(--ease) forwards; }
+.splash-greeting, .splash-sub { zoom: var(--scale, 1); padding-left: calc(160px + var(--tx, 0px) / var(--scale, 1)); opacity: 0; transform: translateY(26px); animation: rise 1000ms var(--ease) forwards; }
 .splash-greeting { font-family: var(--display); font-size: 150px; font-weight: 600; letter-spacing: -.045em; line-height: 1; animation-delay: 150ms; }
 .splash-sub { font-size: 38px; color: var(--muted); margin-top: 26px; animation-delay: 550ms; }
 @keyframes rise { to { opacity: 1; transform: none; } }
-.stage.intro { opacity: 0; transform: translate(-50%, -50%) scale(calc(var(--scale, 1) * 1.035)); }
+.stage.intro { opacity: 0; }
 .reduce-motion .dot-i.on::after { transform: none; opacity: .6; }
 
 /* ---------- Applis ajoutées : logos sur fond sombre ---------- */

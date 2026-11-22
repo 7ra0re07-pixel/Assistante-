@@ -77,6 +77,10 @@ utiliser : choisissez **Accueil TV**, puis **Toujours**.
 - **Paramètres → Paramètres de la TV** ouvre les réglages Android (utile quand
   Accueil TV remplace l'accueil d'origine).
 - Le bouton **Home** ramène toujours en haut de l'accueil.
+- Si les bords de l'écran sont coupés (certaines TV rognent l'image), réglez
+  **Paramètres → Taille de l'affichage** sur 95 %, 90 %… jusqu'à ce que
+  l'horloge et les tuiles soient entièrement visibles. La ligne **Écran**
+  juste en dessous indique la taille et la densité réelles de la TV.
 
 ## Mettre à jour
 
