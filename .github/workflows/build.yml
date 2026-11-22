@@ -32,23 +32,45 @@ jobs:
         run: gradle -p android assembleRelease --no-daemon
 
       - name: Renommer l'APK
-        run: cp android/app/build/outputs/apk/release/app-release.apk AccueilTV.apk
+        run: |
+          cp android/app/build/outputs/apk/release/app-release.apk AccueilTV.apk
+          cp AccueilTV.apk "AccueilTV-1.${{ github.run_number }}.apk"
 
       - uses: actions/upload-artifact@v4
         with:
           name: apk
           path: AccueilTV.apk
 
-      - name: Publier dans la release « apk »
+      # Une release par version (v1.N), marquée « Latest » : APK avec le numéro dans le nom
+      # + même fichier sous un nom fixe pour le lien « toujours la dernière version ».
+      # GitHub y ajoute automatiquement le code source complet en ZIP.
+      - name: Publier la release de cette version
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
+          name: Accueil TV 1.${{ github.run_number }}
+          body: |
+            Écran d'accueil Android TV, version 1.${{ github.run_number }}.
+            - AccueilTV-1.${{ github.run_number }}.apk : l'appli à installer sur la TV (clé USB ou Downloader).
+            - Source code (zip) : sauvegarde complète du projet (code, logos, fonds d'écran, guides).
+            Dernière version, toujours au même lien : https://github.com/${{ github.repository }}/releases/latest/download/AccueilTV.apk
+          files: |
+            AccueilTV-1.${{ github.run_number }}.apk
+            AccueilTV.apk
+          make_latest: true
+
+      # Ancien lien conservé (…/releases/download/apk/AccueilTV.apk)
+      - name: Mettre à jour la release « apk »
         uses: softprops/action-gh-release@v2
         with:
           tag_name: apk
-          name: Accueil TV (dernière version)
+          name: Accueil TV (lien historique)
           body: |
-            APK de l'écran d'accueil Android TV, compilé automatiquement (version 1.${{ github.run_number }}).
-            Lien direct : https://github.com/${{ github.repository }}/releases/download/apk/AccueilTV.apk
+            Ancien lien, toujours à jour (version 1.${{ github.run_number }}).
+            Préférez : https://github.com/${{ github.repository }}/releases/latest
           files: AccueilTV.apk
-          make_latest: true
+          make_latest: false
 
   pages:
     name: Publier le site (et l'APK) sur GitHub Pages

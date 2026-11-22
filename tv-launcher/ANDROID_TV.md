@@ -33,7 +33,7 @@ Le fichier `.github/workflows/build.yml` compile l'APK à chaque modification
 de `tv-launcher/` ou `android/` sur la branche `main`, puis :
 
 - le publie dans la release GitHub **apk** :
-  `https://github.com/7ra0re07-pixel/Assistante-/releases/download/apk/AccueilTV.apk`
+  `https://github.com/7ra0re07-pixel/Assistante-/releases/latest/download/AccueilTV.apk`
 - le place sur le site, à l'adresse courte
   `https://7ra0re07-pixel.github.io/Assistante-/tv.apk`
 

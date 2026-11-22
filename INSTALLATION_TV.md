@@ -4,7 +4,10 @@ L'appli est compilée automatiquement par GitHub à chaque modification.
 Lien de téléchargement (toujours la dernière version) :
 
 - Adresse courte, à taper dans Downloader : **`7ra0re07-pixel.github.io/Assistante-/tv.apk`**
-- Adresse de secours : `https://github.com/7ra0re07-pixel/Assistante-/releases/download/apk/AccueilTV.apk`
+- Toujours la dernière version (GitHub) : `https://github.com/7ra0re07-pixel/Assistante-/releases/latest/download/AccueilTV.apk`
+- Toutes les versions, avec le numéro dans le nom du fichier (`AccueilTV-1.N.apk`) et le
+  projet complet en ZIP : https://github.com/7ra0re07-pixel/Assistante-/releases
+- Pas de Downloader ? Voir [Installer depuis une clé USB](#installer-depuis-une-clé-usb) plus bas.
 
 ---
 
@@ -107,3 +110,44 @@ d'une version sans ce réglage à la nouvelle.
 **Paramètres → Applications → Accueil TV → Désinstaller.**
 Sur Google TV, si vous aviez utilisé Button Mapper, désactivez aussi son
 réglage pour le bouton Home.
+
+---
+
+## Installer depuis une clé USB
+
+### Sur l'ordinateur
+
+1. Téléchargez l'APK : https://github.com/7ra0re07-pixel/Assistante-/releases/latest
+   (fichier **`AccueilTV-1.N.apk`**, N étant le numéro de version).
+2. Branchez une clé USB formatée en **FAT32** ou **exFAT** (le cas de presque toutes les clés).
+3. Copiez le fichier APK **à la racine** de la clé (pas dans un dossier), puis éjectez la clé proprement.
+
+### Sur la TV
+
+1. Installez un gestionnaire de fichiers depuis le **Google Play Store** :
+   **X-plore File Manager** (gratuit, conçu pour la télécommande) ou **File Commander**.
+   Certaines TV en ont déjà un (« Fichiers », « Gestionnaire de fichiers », « Media Center ») ;
+   il fonctionne aussi s'il sait ouvrir les fichiers APK.
+2. Branchez la clé USB sur la TV (ou sur l'adaptateur USB du boîtier).
+3. Ouvrez le gestionnaire de fichiers, choisissez la **clé USB** (souvent « USB », « Stockage
+   USB » ou le nom de la clé), sélectionnez **`AccueilTV-1.N.apk`** et appuyez sur OK.
+4. Android bloque la première fois : choisissez **Paramètres** dans le message, puis activez
+   l'autorisation pour **le gestionnaire de fichiers** (X-plore ou File Commander).
+   Revenez avec Retour et rouvrez l'APK.
+   - Sans message : **Paramètres → Applications → Sécurité et restrictions → Sources inconnues**
+     (Google TV : activez d'abord le mode développeur, voir l'étape 2 plus haut),
+     puis activez votre gestionnaire de fichiers.
+5. Appuyez sur **Installer**, puis **Ouvrir**.
+
+Pour une mise à jour, même chose : l'APK s'installe par-dessus l'ancienne version
+et **vos réglages sont conservés** (même signature). La suite (écran d'accueil par défaut) est
+identique à l'installation avec Downloader.
+
+## Sauvegarde complète du projet
+
+- Projet entier en ZIP (code, logos, fonds d'écran, guides), toujours à jour :
+  https://github.com/7ra0re07-pixel/Assistante-/archive/refs/heads/main.zip
+- Ou, figé pour une version précise : **Source code (zip)** sous chaque version, sur
+  https://github.com/7ra0re07-pixel/Assistante-/releases
+
+Votre clé Voice Monkey et vos appareils ne sont **pas** dans ce ZIP : ils restent uniquement sur la TV.
