@@ -13,18 +13,53 @@
   const prefs = Object.assign({ cityIndex: 0, h24: true, reduceMotion: false, sounds: true, openApps: true, sleepMin: 3 }, load('tv.prefs', {}));
   const savePrefs = () => save('tv.prefs', prefs);
 
-  // Favoris : ordre des applis + applis masquées
-  let favs = load('tv.favs', null);
-  function normalizeFavs() {
-    const ids = D.apps.map(a => a.id);
-    if (!favs || !Array.isArray(favs.order)) favs = { order: ids.slice(), hidden: [] };
-    favs.order = favs.order.filter(id => appById[id]);
-    ids.forEach(id => { if (!favs.order.includes(id)) favs.order.push(id); });
-    favs.hidden = (favs.hidden || []).filter(id => appById[id]);
-    if (favs.order.every(id => favs.hidden.includes(id))) favs.hidden = [];
+  /* ---------- Bibliothèque d'applis (enregistrée) ---------- */
+  // items  : applis présentes sur l'accueil, dans l'ordre, avec leur rangée
+  // custom : applis personnalisées (nom, lien ou paquet, couleur)
+  const ROW_DEFS = [
+    { key: 'favoris', title: 'Favoris' },
+    { key: 'films', title: 'Films & séries' },
+    { key: 'musique', title: 'Musique' }
+  ];
+  const rowTitle = (k) => (ROW_DEFS.find(d => d.key === k) || ROW_DEFS[0]).title;
+  const BUILTIN = [...D.apps, ...(D.catalog || [])];
+  const builtinById = Object.fromEntries(BUILTIN.map(a => [a.id, a]));
+  let lib = load('tv.library', null);
+
+  function shade(hex, f) { // f < 0 : plus sombre
+    const n = parseInt(hex.slice(1), 16), ch = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+    return '#' + ch.map(v => Math.round(f < 0 ? v * (1 + f) : v + (255 - v) * f).toString(16).padStart(2, '0')).join('');
   }
-  normalizeFavs();
-  const favApps = () => favs.order.filter(id => !favs.hidden.includes(id)).map(id => appById[id]);
+  function luminance(hex) {
+    const n = parseInt(hex.slice(1), 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255].map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; })
+      .reduce((acc, v, i) => acc + v * [0.2126, 0.7152, 0.0722][i], 0);
+  }
+  function customApp(c) {
+    return { id: c.id, custom: true, name: c.name, url: c.url || '', package: c.package || '', color: c.color,
+      kind: c.kind || 'video', colors: [c.color, c.color, shade(c.color, -0.55)],
+      textColor: luminance(c.color) > 0.45 ? '#111111' : '#FFFFFF',
+      desc: c.url ? `Ouvre ${c.url.replace(/^https?:\/\//, '').replace(/\/$/, '')}` : `Appli Android ${c.package}` };
+  }
+  const getApp = (id) => builtinById[id] || (lib.custom.find(c => c.id === id) && customApp(lib.custom.find(c => c.id === id)));
+
+  function normalizeLib() {
+    if (!lib || !Array.isArray(lib.items)) {
+      // première ouverture : on reprend les anciens favoris s'ils existent
+      const old = load('tv.favs', null);
+      const ids = old && Array.isArray(old.order) ? old.order.filter(id => !(old.hidden || []).includes(id)) : D.apps.map(a => a.id);
+      lib = { items: ids.map(id => ({ id, row: 'favoris' })), custom: [] };
+    }
+    lib.custom = (lib.custom || []).filter(c => c && c.id && c.name && c.color);
+    const keys = ROW_DEFS.map(d => d.key);
+    const seen = new Set();
+    lib.items = lib.items.filter(it => it && getApp(it.id) && !seen.has(it.id) && seen.add(it.id))
+      .map(it => ({ id: it.id, row: keys.includes(it.row) ? it.row : 'favoris' }));
+    if (!lib.items.length) lib.items = D.apps.map(a => ({ id: a.id, row: 'favoris' }));
+  }
+  normalizeLib();
+  const saveLib = () => save('tv.library', lib);
+  const appsInRow = (key) => lib.items.filter(it => it.row === key).map(it => getApp(it.id));
 
   /* ---------- Mise à l'échelle 16:9 ---------- */
   function fit() { document.documentElement.style.setProperty('--scale', Math.min(innerWidth / 1920, innerHeight / 1080)); }
@@ -173,17 +208,22 @@
   function el(tag, cls, html) { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; }
 
   // Logo officiel (SVG) quand il existe, sinon logo dessiné en CSS (Netflix, YouTube)
+  const esc = (t) => String(t).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
   function logoHTML(a) {
+    if (a.custom) return `<span class="app-logo custom" style="--logo:${a.textColor}">${esc(a.name)}</span>`;
     return a.logo
-      ? `<img class="app-logo-img app-logo-${a.id}" src="${a.logo}" alt="" draggable="false">`
+      ? `<img class="app-logo-img app-logo-${a.id}" src="${a.logo}" alt="" draggable="false" data-name="${esc(a.name)}" onerror="tvLogoFallback(this)">`
       : `<span class="app-logo ${a.logoStyle}" style="--logo:${a.logoColor}">${a.logoStyle === 'play' ? '<span class="play"></span>' : ''}${a.name}</span>`;
   }
+  // logo introuvable : on affiche le nom de l'appli à la place
+  window.tvLogoFallback = (img) => { const t = document.createElement('span'); t.className = 'app-logo bold'; t.style.setProperty('--logo', '#fff'); t.textContent = img.dataset.name; img.replaceWith(t); };
   const appItem = (a) => ({ kind: 'app', id: a.id, title: a.name, source: a.id, desc: a.desc, colors: a.colors, action: `Ouvrir ${a.name}` });
 
   function appTile(a) {
     const t = el('button', 'tile tile-app focusable', logoHTML(a));
     t.style.setProperty('--tc1', a.colors[0]); t.style.setProperty('--tc2', a.colors[1]); t.style.setProperty('--tc3', a.colors[2]);
     t.setAttribute('aria-label', a.name);
+    if (a.custom) t.classList.add('tile-custom');
     t._item = appItem(a);
     return t;
   }
@@ -209,7 +249,7 @@
   function buildRows() {
     const rowsEl = $('rows'); rowsEl.innerHTML = '';
     ROWS = [
-      { title: 'Favoris', items: favApps().map(appTile) },
+      ...ROW_DEFS.map(d => ({ title: d.title, key: d.key, items: appsInRow(d.key).map(appTile) })).filter(rw => rw.items.length),
       { title: 'Continuer à regarder', items: D.continue.map(i => contentTile(i, true)) },
       { title: 'Recommandations', items: D.recommendations.map(i => contentTile(i, false)) }
     ];
@@ -227,7 +267,7 @@
 
   /* ---------- Bannière dynamique ---------- */
   let heroItem = null, slideIdx = 0, rotTimer = 0, heroTimer = 0, swapToken = 0;
-  const slides = () => favApps();
+  const slides = () => { const f = appsInRow('favoris'); return f.length ? f : lib.items.map(it => getApp(it.id)); };
 
   function setAmbient(col) {
     const s = document.documentElement.style;
@@ -239,7 +279,7 @@
     const token = ++swapToken;
     const apply = () => {
       if (token !== swapToken) return;
-      const a = appById[item.source];
+      const a = getApp(item.source);
       const isApp = item.kind === 'app';
       $('heroText').classList.toggle('is-app', isApp);
       $('heroLogo').innerHTML = isApp ? logoHTML(a) : '';
@@ -291,7 +331,7 @@
     clearTimeout(heroTimer);
     if (r >= 2 && target._item) {
       const item = target._item;
-      if (item.kind === 'app') slideIdx = Math.max(0, slides().findIndex(a => a.id === item.id));
+      if (item.kind === 'app') { const k = slides().findIndex(a => a.id === item.id); if (k >= 0) slideIdx = k; }
       heroTimer = setTimeout(() => renderHero(item, true), fromKey ? 160 : 0);
     } else if (r <= 1 && prevR >= 2) {
       showSlide(slideIdx);
@@ -342,28 +382,30 @@
     if (target === $('settingsBtn')) return openSettings();
     if (target === $('heroMore')) return openDetails(heroItem);
     const item = target === $('heroPlay') ? heroItem : target._item;
-    if (item) launch(appById[item.source], item);
+    if (item && getApp(item.source)) launch(getApp(item.source), item);
   }
 
   /* ---------- Ouverture des applis ---------- */
   const isAndroid = /Android/i.test(navigator.userAgent);
   const hasBridge = () => window.AndroidTV && typeof window.AndroidTV.launchApp === 'function';
 
+  // Site de secours : le site de l'appli, sinon sa page sur le Play Store
+  const webUrl = (a) => a.url || `https://play.google.com/store/apps/details?id=${encodeURIComponent(a.package)}`;
   // intent://… ouvre l'appli installée ; S.browser_fallback_url = site web si elle est absente
   function intentUrl(a) {
-    const d = a.deeplink;
-    return `intent://${d.path}#Intent;scheme=${d.scheme};package=${a.package};` +
-      `S.browser_fallback_url=${encodeURIComponent(a.url)};end`;
+    const fallback = `S.browser_fallback_url=${encodeURIComponent(webUrl(a))};end`;
+    if (a.deeplink) return `intent://${a.deeplink.path}#Intent;scheme=${a.deeplink.scheme};package=${a.package};${fallback}`;
+    return `intent:#Intent;action=android.intent.action.MAIN;category=android.intent.category.LEANBACK_LAUNCHER;package=${a.package};${fallback}`;
   }
   function launch(a, item) {
     sound('select');
     const what = item.kind === 'app' ? a.name : `${item.title} dans ${a.name}`;
-    if (hasBridge()) { // lanceur Android (WebView) : ouverture native
+    if (hasBridge() && a.package) { // lanceur Android (WebView) : ouverture native
       toast(`Ouverture de ${what}`);
       if (!window.AndroidTV.launchApp(a.package)) toast(`${a.name} n'est pas installée sur cette TV`);
       return;
     }
-    if (prefs.openApps && isAndroid && a.deeplink) {
+    if (prefs.openApps && isAndroid && a.package) {
       toast(`Ouverture de ${what}`);
       let left = false;
       const mark = () => { left = true; };
@@ -375,12 +417,12 @@
       setTimeout(() => {
         if (left || document.hidden) return;
         toast(`${a.name} ne s'ouvre pas depuis ce navigateur. Ouverture du site web.`);
-        setTimeout(() => { location.href = a.url; }, 1200);
+        setTimeout(() => { location.href = webUrl(a); }, 1200);
       }, 2500);
       return;
     }
-    toast(`Ouverture du site ${a.name}`);
-    setTimeout(() => { location.href = a.url; }, 700);
+    toast(a.url ? `Ouverture de ${a.custom ? a.name : 'du site ' + a.name}` : `${a.name} est une appli Android : ouverture de sa page Play Store`);
+    setTimeout(() => { location.href = webUrl(a); }, 700);
   }
 
   let toastTimer = 0;
@@ -401,110 +443,251 @@
 
   /* ---------- Paramètres ---------- */
   const sleepLabel = () => prefs.sleepMin ? `${prefs.sleepMin} min` : 'Jamais';
+  const SWATCHES = ['#E50914', '#FF6B00', '#F5C518', '#1DB954', '#00A3A3', '#1A73E8', '#6C3BFF', '#E0218A', '#5A5F6B', '#141414'];
+  const ROW_KEYS = ROW_DEFS.map(d => d.key);
+  const switchHTML = (on) => `<span class="switch ${on ? 'on' : ''}"></span>`;
+  const mini = (a) => `<span class="mini" style="--tc2:${a.colors[1]};--tc3:${a.colors[2]}">${logoHTML(a)}</span>`;
+  const cycle = (list, cur, d) => list[(list.indexOf(cur) + d + list.length) % list.length];
+
   const MAIN = [
-    { label: 'Favoris', value: () => `${favApps().length} applis ›`, step: () => openFavPage() },
+    { label: 'Mes applis', value: () => `${lib.items.length} ›`, go: 'manage' },
+    { label: 'Ajouter une appli', value: () => '›', go: 'add' },
     { label: 'Ville pour la météo', value: () => `‹ ${city().name} ›`,
       step: (d) => { prefs.cityIndex = (prefs.cityIndex + d + D.cities.length) % D.cities.length; updateWeather(); } },
     { label: 'Ouvrir les applis installées', toggle: 'openApps' },
     { label: 'Sons de navigation', toggle: 'sounds' },
     { label: 'Mise en veille', value: () => `‹ ${sleepLabel()} ›`,
-      step: (d) => { const i = SLEEP_CHOICES.indexOf(prefs.sleepMin); prefs.sleepMin = SLEEP_CHOICES[(i + d + SLEEP_CHOICES.length) % SLEEP_CHOICES.length]; resetIdle(); } },
+      step: (d) => { prefs.sleepMin = cycle(SLEEP_CHOICES, prefs.sleepMin, d); resetIdle(); } },
     { label: 'Heure sur 24 h', toggle: 'h24', after: tick },
     { label: 'Réduire les animations', toggle: 'reduceMotion', after: applyMotion },
     { label: 'Plein écran', value: () => document.fullscreenElement ? 'Activé' : 'Désactivé',
       step: () => {
-        const p = document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.();
-        Promise.resolve(p).catch(() => toast('Plein écran indisponible dans ce navigateur')).finally(() => setTimeout(renderSettings, 300));
+        const pr = document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.();
+        Promise.resolve(pr).catch(() => toast('Plein écran indisponible dans ce navigateur')).finally(() => setTimeout(renderSettings, 300));
       } }
   ];
-  let page = 'main', sIdx = 0, fIdx = 0, grabbing = false, favsDirty = false;
 
-  function renderSettings() {
-    if (page === 'main') {
-      $('settingsTitle').textContent = 'Paramètres';
-      $('settingsHint').textContent = 'Flèches pour choisir, OK pour modifier, Retour pour fermer.';
-      $('settingsList').innerHTML = MAIN.map((s, i) => {
-        const val = s.toggle ? `<span class="switch ${prefs[s.toggle] ? 'on' : ''}"></span>` : s.value();
-        return `<li class="setting ${i === sIdx ? 'focused' : ''}" data-i="${i}"><span>${s.label}</span><span class="val">${val}</span></li>`;
-      }).join('');
-      return;
-    }
-    const grabbed = appById[favs.order[fIdx]];
-    $('settingsTitle').textContent = 'Favoris';
-    $('settingsHint').textContent = grabbing
-      ? `Haut et Bas pour déplacer ${grabbed.name}, OK pour la poser.`
-      : 'OK : afficher ou masquer. Droite : déplacer. Retour : terminer.';
-    $('settingsList').innerHTML = favs.order.map((id, i) => {
-      const a = appById[id], shown = !favs.hidden.includes(id);
-      const cls = ['setting', i === fIdx ? (grabbing ? 'grab' : 'focused') : '', shown ? '' : 'off'].join(' ');
-      const val = i === fIdx && grabbing ? 'Déplacer' : shown ? 'Affichée' : 'Masquée';
-      return `<li class="${cls}" data-i="${i}"><span class="fav-left"><span class="fav-pos">${i + 1}</span>
-        <span class="fav-check ${shown ? 'on' : ''}"></span><span class="fav-name">${a.name}</span></span><span class="val">${val}</span></li>`;
-    }).join('');
+  const nav = { page: 'main', idx: 0 };
+  const stack = [];
+  let target = null, grabId = null, confirmRemove = false;
+  const newDraft = () => ({ name: '', link: '', color: SWATCHES[5], row: 'favoris' });
+  let draft = newDraft();
+
+  function go(page, idx = 0) {
+    stack.push({ page: nav.page, idx: nav.idx });
+    Object.assign(nav, { page, idx }); grabId = null; confirmRemove = false;
+    $('settingsList').scrollTop = 0; renderSettings();
   }
-  function changeSetting(d) {
-    const s = MAIN[sIdx];
-    sound('select');
-    if (s.toggle) { prefs[s.toggle] = !prefs[s.toggle]; s.after && s.after(); }
-    else s.step(d);
-    savePrefs(); renderSettings();
+  function goBack() {
+    const prev = stack.pop();
+    if (!prev) return closeSettings();
+    Object.assign(nav, prev); grabId = null; confirmRemove = false;
+    sound('back'); $('settingsList').scrollTop = 0; renderSettings();
   }
-  function openFavPage() { page = 'fav'; fIdx = 0; grabbing = false; }
-  function leaveFavPage() {
-    page = 'main'; grabbing = false;
-    if (favsDirty) applyFavs();
-  }
-  function applyFavs() {
-    favsDirty = false;
-    save('tv.favs', favs);
-    buildRows();
-    slideIdx = 0; heroItem = null;
-    showSlide(0, false);
+  function libChanged() { // enregistre et redessine l'accueil derrière le panneau
+    saveLib(); buildRows();
+    const n = slides().length; slideIdx = Math.min(slideIdx, n - 1); heroItem = null; showSlide(slideIdx, false);
     r = Math.min(r, NAV.length - 1);
   }
-  function toggleFav() {
-    const id = favs.order[fIdx];
-    if (favs.hidden.includes(id)) favs.hidden = favs.hidden.filter(x => x !== id);
-    else if (favApps().length <= 1) { sound('edge'); return toast('Gardez au moins une appli dans les favoris'); }
-    else favs.hidden.push(id);
-    favsDirty = true; sound('select');
+
+  // Lien saisi : adresse web ou nom de paquet Android
+  function parseLink(v) {
+    v = v.trim();
+    if (!v) return null;
+    if (/^[a-z][a-z0-9+.-]*:\/\//i.test(v)) return { url: v };
+    const parts = v.split('.');
+    if (!v.includes('/') && !/^www\./i.test(v) && parts.length >= 3 && parts.every(x => /^[a-z_][a-z0-9_]*$/i.test(x)) &&
+        !/^(com|fr|net|org|io|be|ch|ca|eu|co|uk|de|es|it)$/i.test(parts[parts.length - 1])) return { package: v };
+    if (/^[^\s/]+\.[^\s/]+/.test(v)) return { url: 'https://' + v };
+    return null;
   }
+  const linkNote = () => {
+    const l = parseLink(draft.link);
+    if (!draft.link.trim()) return 'Exemple : https://www.exemple.fr ou com.exemple.app';
+    if (!l) return 'Ce lien n’est pas reconnu.';
+    return l.url ? `Sera ouvert comme site web : ${l.url}` : `Sera ouvert comme appli Android : ${l.package}`;
+  };
+  const draftApp = () => customApp({ id: 'apercu', name: draft.name.trim() || 'Mon appli', color: draft.color });
+
+  function addApp(id, row) {
+    lib.items.push({ id, row }); libChanged();
+    toast(`${getApp(id).name} ajoutée à ${rowTitle(row)}`);
+  }
+  function moveGrabbed(dir) {
+    const i = lib.items.findIndex(it => it.id === grabId), row = lib.items[i].row;
+    let j = i + dir;
+    while (j >= 0 && j < lib.items.length && lib.items[j].row !== row) j += dir;
+    if (j < 0 || j >= lib.items.length) return sound('edge');
+    [lib.items[i], lib.items[j]] = [lib.items[j], lib.items[i]];
+    sound('move'); libChanged();
+  }
+  function submitCustom() {
+    const name = draft.name.trim(), link = parseLink(draft.link);
+    if (!name) { nav.idx = 0; sound('edge'); return toast("Indiquez le nom de l'appli."); }
+    if (!link) { nav.idx = 1; sound('edge'); return toast('Indiquez un lien (https://…) ou un nom de paquet Android (com.exemple.app).'); }
+    const id = 'perso-' + Date.now().toString(36);
+    lib.custom.push({ id, name: name.slice(0, 30), url: link.url || '', package: link.package || '', color: draft.color, kind: draft.row === 'musique' ? 'music' : 'video' });
+    addApp(id, draft.row);
+    draft = newDraft();
+    goBack();
+  }
+
+  // Chaque page : titre, aide et lignes ({ label, value, ok, left, right } ; header = titre de section)
+  function pageDef() {
+    switch (nav.page) {
+      case 'main': return {
+        title: 'Paramètres', hint: 'Flèches pour choisir, OK pour modifier, Retour pour fermer.',
+        entries: MAIN.map(m => ({
+          label: m.label, value: m.toggle ? switchHTML(prefs[m.toggle]) : m.value(),
+          ok: () => m.go ? go(m.go) : mainStep(m, 1),
+          right: m.go ? () => go(m.go) : () => mainStep(m, 1),
+          left: m.go || m.toggle ? null : () => mainStep(m, -1)
+        }))
+      };
+      case 'manage': {
+        const entries = [];
+        ROW_DEFS.forEach(d => {
+          const items = lib.items.filter(it => it.row === d.key);
+          if (!items.length) return;
+          entries.push({ header: true, label: d.title });
+          items.forEach(it => {
+            const a = getApp(it.id), grabbed = grabId === it.id;
+            entries.push({ id: it.id, cls: grabbed ? 'grab' : '', label: `${mini(a)}<span>${esc(a.name)}</span>`,
+              value: grabbed ? 'Haut / Bas' : '›', ok: () => { target = it.id; go('actions'); },
+              right: () => { grabId = it.id; sound('select'); } });
+          });
+        });
+        return { title: 'Mes applis', entries,
+          hint: grabId ? `Haut et Bas pour déplacer ${getApp(grabId).name} dans sa rangée, OK pour la poser.`
+            : 'OK : options de l’appli. Droite : déplacer. Retour : terminer.' };
+      }
+      case 'actions': {
+        const a = getApp(target), it = lib.items.find(x => x.id === target);
+        if (!a || !it) return { title: 'Mes applis', hint: '', entries: [] };
+        const setRow = (d) => { it.row = cycle(ROW_KEYS, it.row, d); lib.items = [...lib.items.filter(x => x !== it), it]; sound('move'); libChanged(); };
+        return { title: a.name, hint: 'Gauche et Droite pour changer de rangée. Retour pour revenir.',
+          entries: [
+            { label: 'Rangée', value: `‹ ${rowTitle(it.row)} ›`, ok: () => setRow(1), right: () => setRow(1), left: () => setRow(-1) },
+            { label: 'Changer l’ordre', value: '›', ok: () => { goBack(); grabId = target; renderSettings(); } },
+            { label: confirmRemove ? 'Appuyez de nouveau sur OK pour retirer' : 'Retirer de l’accueil', cls: 'danger', value: '',
+              ok: () => {
+                if (!confirmRemove) { confirmRemove = true; return; }
+                if (lib.items.length <= 1) { confirmRemove = false; return toast('Gardez au moins une appli sur l’accueil.'); }
+                lib.items = lib.items.filter(x => x.id !== target);
+                if (a.custom) lib.custom = lib.custom.filter(c => c.id !== target);
+                libChanged(); toast(`${a.name} retirée de l’accueil`); goBack();
+              } }
+          ] };
+      }
+      case 'add': {
+        const available = BUILTIN.filter(a => !lib.items.some(it => it.id === a.id));
+        const entries = [{ label: 'Appli personnalisée', value: 'Créer ›', cls: 'special', ok: () => go('custom') }];
+        entries.push({ header: true, label: available.length ? 'Applis populaires' : 'Toutes les applis de la liste sont déjà sur l’accueil.' });
+        available.forEach(a => entries.push({ label: `${mini(a)}<span>${esc(a.name)}</span>`, value: a.kind === 'music' ? 'Musique' : 'Films & séries',
+          ok: () => { target = a.id; go('addRow', ROW_KEYS.indexOf(a.kind === 'music' ? 'musique' : 'films')); } }));
+        return { title: 'Ajouter une appli', hint: 'OK pour ajouter, Retour pour revenir.', entries };
+      }
+      case 'addRow': {
+        const a = getApp(target), suggested = a.kind === 'music' ? 'musique' : 'films';
+        return { title: `Ajouter ${a.name}`, hint: 'Choisissez la rangée où placer l’appli.',
+          entries: ROW_DEFS.map(d => ({ label: d.title, value: d.key === suggested ? 'Suggérée' : '', ok: () => { addApp(target, d.key); goBack(); } })) };
+      }
+      case 'custom': return {
+        title: 'Appli personnalisée', preview: true,
+        hint: 'OK pour écrire, Haut et Bas pour changer de champ, Retour pour annuler.',
+        entries: [
+          { field: 'name', label: 'Nom', ok: () => focusField('name') },
+          { field: 'link', label: 'Lien ou paquet Android', ok: () => focusField('link') },
+          { label: 'Couleur de fond', value: `<span class="swatches">${SWATCHES.map(c => `<i class="sw${c === draft.color ? ' on' : ''}" style="background:${c}"></i>`).join('')}</span>`,
+            ok: () => { draft.color = cycle(SWATCHES, draft.color, 1); }, right: () => { draft.color = cycle(SWATCHES, draft.color, 1); }, left: () => { draft.color = cycle(SWATCHES, draft.color, -1); } },
+          { label: 'Rangée', value: `‹ ${rowTitle(draft.row)} ›`,
+            ok: () => { draft.row = cycle(ROW_KEYS, draft.row, 1); }, right: () => { draft.row = cycle(ROW_KEYS, draft.row, 1); }, left: () => { draft.row = cycle(ROW_KEYS, draft.row, -1); } },
+          { label: 'Ajouter l’appli', cls: 'primary', value: '', ok: submitCustom }
+        ]
+      };
+    }
+  }
+  function mainStep(m, d) {
+    if (m.toggle) { prefs[m.toggle] = !prefs[m.toggle]; m.after && m.after(); }
+    else m.step(d);
+    savePrefs();
+  }
+  function focusField(f) {
+    const inp = $('cust-' + f); if (!inp) return;
+    inp.focus(); const n = inp.value.length; try { inp.setSelectionRange(n, n); } catch { /* ignoré */ }
+  }
+  function updatePreview() {
+    const pv = $('settingsPreview');
+    const a = draftApp();
+    pv.style.setProperty('--tc2', a.colors[1]); pv.style.setProperty('--tc3', a.colors[2]);
+    pv.innerHTML = logoHTML(a);
+    const note = $('cust-note'); if (note) note.textContent = linkNote();
+  }
+
+  function renderSettings() {
+    const def = pageDef();
+    const sel = def.entries.filter(e => !e.header);
+    nav.idx = Math.max(0, Math.min(sel.length - 1, nav.idx));
+    if (grabId) nav.idx = Math.max(0, sel.findIndex(e => e.id === grabId));
+    $('settingsTitle').textContent = def.title;
+    $('settingsHint').textContent = def.hint;
+    $('settingsPreview').hidden = !def.preview;
+    let k = -1;
+    $('settingsList').innerHTML = def.entries.map(e => {
+      if (e.header) return `<li class="setting-group">${e.label}</li>`;
+      k++;
+      const cls = ['setting', e.cls || '', k === nav.idx && !e.cls?.includes('grab') ? 'focused' : '', e.field ? 'field' : ''].join(' ');
+      if (e.field) {
+        const extra = e.field === 'link' ? `<span class="field-note" id="cust-note"></span>` : '';
+        return `<li class="${cls}" data-i="${k}"><span class="field-label">${e.label}</span>
+          <input id="cust-${e.field}" type="${e.field === 'link' ? 'url' : 'text'}" maxlength="${e.field === 'name' ? 30 : 300}"
+            value="${esc(draft[e.field])}" autocomplete="off" autocapitalize="${e.field === 'name' ? 'words' : 'off'}" spellcheck="false">${extra}</li>`;
+      }
+      return `<li class="${cls}" data-i="${k}"><span class="row-left">${e.label}</span><span class="val">${e.value ?? ''}</span></li>`;
+    }).join('');
+    if (def.preview) {
+      updatePreview();
+      ['name', 'link'].forEach(f => $('cust-' + f).addEventListener('input', (ev) => { draft[f] = ev.target.value; updatePreview(); }));
+    }
+    // garde la ligne sélectionnée visible dans la liste
+    const ul = $('settingsList'), li = ul.querySelector('.focused, .grab');
+    if (li) {
+      if (li.offsetTop - 60 < ul.scrollTop) ul.scrollTop = Math.max(0, li.offsetTop - 60);
+      else if (li.offsetTop + li.offsetHeight + 12 > ul.scrollTop + ul.clientHeight) ul.scrollTop = li.offsetTop + li.offsetHeight + 12 - ul.clientHeight;
+    }
+  }
+
   function settingsKey(k) {
-    if (page === 'main') {
-      if (k === 'back') return closeSettings();
-      if (k === 'up' || k === 'down') {
-        const n = Math.max(0, Math.min(MAIN.length - 1, sIdx + (k === 'up' ? -1 : 1)));
-        sound(n === sIdx ? 'edge' : 'move'); sIdx = n;
-      } else if (k === 'ok' || k === 'right') return changeSetting(1);
-      else if (k === 'left') { if (MAIN[sIdx].toggle || sIdx === 0) return sound('edge'); return changeSetting(-1); }
+    const sel = pageDef().entries.filter(e => !e.header);
+    if (grabId) { // déplacement d'une appli dans « Mes applis »
+      if (k === 'up' || k === 'down') moveGrabbed(k === 'up' ? -1 : 1);
+      else { grabId = null; sound('select'); }
       return renderSettings();
     }
-    // Page Favoris
-    if (grabbing) {
-      if (k === 'up' || k === 'down') {
-        const to = fIdx + (k === 'up' ? -1 : 1);
-        if (to < 0 || to >= favs.order.length) sound('edge');
-        else { [favs.order[fIdx], favs.order[to]] = [favs.order[to], favs.order[fIdx]]; fIdx = to; favsDirty = true; sound('move'); }
-      } else { grabbing = false; sound('select'); } // OK, Gauche ou Retour : poser
-      return renderSettings();
-    }
-    if (k === 'back') { sound('back'); leaveFavPage(); return renderSettings(); }
+    if (k === 'back') { if (nav.page === 'custom') document.activeElement.blur?.(); return goBack(); }
     if (k === 'up' || k === 'down') {
-      const n = Math.max(0, Math.min(favs.order.length - 1, fIdx + (k === 'up' ? -1 : 1)));
-      sound(n === fIdx ? 'edge' : 'move'); fIdx = n;
-    } else if (k === 'ok') toggleFav();
-    else if (k === 'right') { grabbing = true; sound('select'); }
-    else if (k === 'left') sound('edge');
-    renderSettings();
+      const n = Math.max(0, Math.min(sel.length - 1, nav.idx + (k === 'up' ? -1 : 1)));
+      sound(n === nav.idx ? 'edge' : 'move'); nav.idx = n; confirmRemove = false;
+      return renderSettings();
+    }
+    const e = sel[nav.idx]; if (!e) return;
+    const fn = e[k];
+    if (!fn) return sound('edge');
+    sound(k === 'ok' ? 'select' : 'move');
+    const page = nav.page;
+    fn();
+    if (nav.page === page && document.activeElement?.tagName !== 'INPUT') renderSettings();
   }
   function openSettings() {
-    sound('select'); page = 'main'; sIdx = 0; renderSettings();
+    sound('select'); stack.length = 0; Object.assign(nav, { page: 'main', idx: 0 }); grabId = null;
+    $('settingsList').scrollTop = 0; renderSettings();
     openLayer('settings', 'settings');
   }
   function closeSettings() {
-    if (page === 'fav') leaveFavPage();
+    document.activeElement?.blur?.();
     $('settings').classList.remove('open'); $('settings').setAttribute('aria-hidden', 'true');
     layer = 'home'; sound('back');
+    r = Math.min(r, NAV.length - 1);
     focus(r, Math.min(c, NAV[r].items.length - 1), false);
     restartRotation();
   }
@@ -637,6 +820,12 @@
     const k = KEY[e.key] || CODE[e.keyCode];
     if (splashOn || saverOn) { e.preventDefault(); return wake(); } // n'importe quelle touche
     resetIdle();
+    if (document.activeElement?.tagName === 'INPUT') { // saisie : on laisse le texte s'écrire
+      const nav2 = { ArrowUp: 'up', ArrowDown: 'down', Enter: 'down', Escape: 'stay', GoBack: 'stay' }[e.key] || (e.keyCode === 4 ? 'stay' : null);
+      if (!nav2) return;
+      e.preventDefault(); document.activeElement.blur();
+      return nav2 === 'stay' ? renderSettings() : settingsKey(nav2);
+    }
     if (!k) return;
     e.preventDefault();
     const now = performance.now();
@@ -666,8 +855,11 @@
   }
   ['weather', 'settingsBtn', 'heroPlay', 'heroMore'].forEach(id => bindPointer($(id)));
   $('settingsList').addEventListener('click', (e) => {
-    const li = e.target.closest('.setting'); if (!li) return;
-    if (page === 'main') { sIdx = +li.dataset.i; changeSetting(1); } else { fIdx = +li.dataset.i; toggleFav(); renderSettings(); }
+    const li = e.target.closest('.setting'); if (!li || e.target.tagName === 'INPUT') return;
+    nav.idx = +li.dataset.i; settingsKey('ok');
+  });
+  $('settingsList').addEventListener('focusin', (e) => { // clic direct dans un champ
+    const li = e.target.closest('.setting'); if (li && nav.idx !== +li.dataset.i) { nav.idx = +li.dataset.i; [...$('settingsList').children].forEach(x => x.classList.toggle('focused', x === li)); }
   });
   $('details').addEventListener('click', () => closeLayer('details'));
   $('weatherPanel').addEventListener('click', () => closeLayer('weatherPanel'));
