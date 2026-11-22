@@ -74,11 +74,15 @@ jobs:
         run: cp apk/AccueilTV.apk tv-launcher/tv.apk
 
       - uses: actions/configure-pages@v5
+      # Nom propre à chaque tentative : une relance ne trouve pas deux archives au même nom
       - uses: actions/upload-pages-artifact@v3
         with:
           path: tv-launcher
+          name: github-pages-${{ github.run_attempt }}
       # GitHub met parfois quelques secondes à rendre l'archive du site visible
       - name: Attendre l'archive du site
         run: sleep 20
       - id: deployment
         uses: actions/deploy-pages@v4
+        with:
+          artifact_name: github-pages-${{ github.run_attempt }}
