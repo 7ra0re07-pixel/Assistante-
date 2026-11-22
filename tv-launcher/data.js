@@ -80,19 +80,5 @@ window.TV_DATA = {
     { id: 'tidal', packages: ['com.aspiro.tidal'], kind: 'music', name: 'Tidal', logo: 'logos/tidal.svg', package: 'com.aspiro.tidal', url: 'https://tidal.com',
       deeplink: { scheme: 'https', path: 'tidal.com/' }, colors: ['#33FFEE', '#10302E', '#050C0C'],
       desc: 'Musique en haute fidélité.' }
-  ],
-
-  cities: [
-    { name: 'Paris', lat: 48.8566, lon: 2.3522 },
-    { name: 'Lyon', lat: 45.764, lon: 4.8357 },
-    { name: 'Marseille', lat: 43.2965, lon: 5.3698 },
-    { name: 'Bordeaux', lat: 44.8378, lon: -0.5792 },
-    { name: 'Lille', lat: 50.6292, lon: 3.0573 },
-    { name: 'Bruxelles', lat: 50.8503, lon: 4.3517 },
-    { name: 'Genève', lat: 46.2044, lon: 6.1432 },
-    { name: 'Montréal', lat: 45.5019, lon: -73.5674 },
-    { name: 'Dakar', lat: 14.7167, lon: -17.4677 },
-    { name: 'Abidjan', lat: 5.36, lon: -4.0083 },
-    { name: 'Bamako', lat: 12.6392, lon: -8.0029 }
   ]
 };

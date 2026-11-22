@@ -3,15 +3,81 @@
   const D = window.TV_DATA;
   const $ = (id) => document.getElementById(id);
   const appById = Object.fromEntries(D.apps.map(a => [a.id, a]));
-  const ROTATION_MS = 10000;               // bannière : une appli toutes les 10 s
   const SLEEP_CHOICES = [0, 1, 3, 5, 10, 15]; // minutes avant la veille (0 = jamais)
   const params = new URLSearchParams(location.search);
+  const SITE = 'https://7ra0re07-pixel.github.io/Assistante-/'; // site publié (version.json, tv.apk)
+  const root = document.documentElement;
 
   /* ---------- Préférences enregistrées ---------- */
   function load(k, def) { try { return JSON.parse(localStorage.getItem(k)) ?? def; } catch { return def; } }
   function save(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* stockage indisponible */ } }
-  const prefs = Object.assign({ cityIndex: 0, h24: true, reduceMotion: false, sounds: true, openApps: true, sleepMin: 3, displayScale: 100 }, load('tv.prefs', {}));
+  const DEFAULT_CITY = { name: 'Sedan', postcode: '08200', region: 'Ardennes', lat: 49.70, lon: 4.94 };
+  const ALL_ROWS = ['favoris', 'films', 'musique', 'recent', 'installed'];
+  const prefs = Object.assign({
+    city: DEFAULT_CITY, unit: 'C', showWeather: true,
+    h24: true, showDate: true, sounds: true, openApps: true, reduceMotion: false,
+    sleepMin: 3, saverStyle: 'photos',
+    displayScale: 100, textSize: 1, perf: false, theme: 'nuit',
+    banner: true, bannerSec: 10,
+    rowOrder: ALL_ROWS.slice(), rowHidden: [],
+    wallCat: 'none', wallEvery: 15
+  }, load('tv.prefs', {}));
+  // Ville : Sedan par défaut (remplace l'ancien réglage par liste de villes)
+  if (!prefs.city || typeof prefs.city.lat !== 'number') prefs.city = DEFAULT_CITY;
+  delete prefs.cityIndex;
+  prefs.rowOrder = [...(prefs.rowOrder || []).filter(k => ALL_ROWS.includes(k)), ...ALL_ROWS.filter(k => !(prefs.rowOrder || []).includes(k))];
+  prefs.rowHidden = (prefs.rowHidden || []).filter(k => ALL_ROWS.includes(k));
   const savePrefs = () => save('tv.prefs', prefs);
+  savePrefs();
+
+  /* ---------- Thèmes ---------- */
+  // Chaque thème définit le fond, les cartes, les textes et la couleur de sélection (dégradés légers, sans flou).
+  const DARK_LINES = { line: 'rgba(255,255,255,.14)', 'line-2': 'rgba(255,255,255,.28)', glass: 'rgba(255,255,255,.07)', 'glass-2': 'rgba(255,255,255,.16)', field: 'rgba(0,0,0,.28)' };
+  const THEMES = {
+    nuit: { label: 'Nuit bleue', v: { ...DARK_LINES, bg: '#0A0E1A', card: '#121829', text: '#F2F4F8', 'text-2': '#D6DBE6', muted: '#A3ACBF',
+      accent: '#F2F4F8', 'accent-ink': '#0A0E1A', 'accent-2': '#3A4256', panel: '#0E1322', modal: '#141A2C', splash: '#1C2B4C',
+      grad: 'radial-gradient(120% 90% at 80% 0%, #16223F 0%, #0A0E1A 60%)' } },
+    noir: { label: 'Noir profond', v: { ...DARK_LINES, bg: '#000000', card: '#0E0E10', text: '#FFFFFF', 'text-2': '#D9D9DE', muted: '#9A9AA3',
+      accent: '#FFFFFF', 'accent-ink': '#000000', 'accent-2': '#44444C', panel: '#050506', modal: '#111114', splash: '#18181C',
+      grad: 'radial-gradient(120% 90% at 80% 0%, #121214 0%, #000000 55%)' } },
+    aurore: { label: 'Aurore', v: { ...DARK_LINES, bg: '#150B26', card: '#24133F', text: '#FBF4FF', 'text-2': '#E8D9F4', muted: '#C3AADA',
+      accent: '#FF7AC6', 'accent-ink': '#2A0B28', 'accent-2': '#6B2350', panel: '#1A0E30', modal: '#24133F', splash: '#5B2A86',
+      grad: 'radial-gradient(110% 80% at 85% 0%, #5B2A86 0%, transparent 60%), radial-gradient(90% 70% at 0% 100%, #7E2766 0%, transparent 60%), #150B26' } },
+    foret: { label: 'Forêt', v: { ...DARK_LINES, bg: '#0B1A13', card: '#14291E', text: '#EFF6EE', 'text-2': '#D3E3D4', muted: '#9DB8A4',
+      accent: '#B9E07B', 'accent-ink': '#10240F', 'accent-2': '#3D5A2A', panel: '#0E2018', modal: '#15291F', splash: '#1F4A33',
+      grad: 'radial-gradient(110% 80% at 85% 0%, #1F4A33 0%, transparent 60%), radial-gradient(90% 70% at 0% 100%, #3B4A23 0%, transparent 60%), #0B1A13' } },
+    coucher: { label: 'Coucher de soleil', v: { ...DARK_LINES, bg: '#1F0D08', card: '#311710', text: '#FFF5EC', 'text-2': '#F2DCCB', muted: '#DDB49A',
+      accent: '#FFB547', 'accent-ink': '#2B1206', 'accent-2': '#7A4310', panel: '#26100A', modal: '#33180F', splash: '#8A2E14',
+      grad: 'radial-gradient(110% 80% at 85% 0%, #8A2E14 0%, transparent 60%), radial-gradient(90% 70% at 0% 100%, #9A5A12 0%, transparent 60%), #1F0D08' } },
+    clair: { label: 'Clair', light: true, v: { bg: '#EEF1F6', card: '#FFFFFF', text: '#121826', 'text-2': '#2C3445', muted: '#5B6578',
+      line: 'rgba(0,0,0,.12)', 'line-2': 'rgba(0,0,0,.22)', glass: 'rgba(0,0,0,.05)', 'glass-2': 'rgba(0,0,0,.09)', field: '#FFFFFF',
+      accent: '#1A56DB', 'accent-ink': '#FFFFFF', 'accent-2': '#DCE6FF', panel: '#F5F7FB', modal: '#FFFFFF', splash: '#D9E4F7',
+      grad: 'radial-gradient(110% 80% at 85% 0%, #D9E4F7 0%, transparent 60%), #EEF1F6' } },
+    auto: { label: 'Automatique', note: 'Clair de 7 h à 19 h, Nuit bleue le soir' }
+  };
+  const THEME_KEYS = Object.keys(THEMES);
+  const hexRgb = (h) => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16)).join(', ');
+  const resolvedTheme = (key) => {
+    if (key === 'auto') { const h = new Date().getHours(); return h >= 7 && h < 19 ? 'clair' : 'nuit'; }
+    return THEMES[key] && THEMES[key].v ? key : 'nuit';
+  };
+  let appliedTheme = null, previewingTheme = false;
+  function applyTheme(key) {
+    const k = resolvedTheme(key), t = THEMES[k];
+    Object.entries(t.v).forEach(([n, val]) => root.style.setProperty('--' + n, val));
+    root.style.setProperty('--bg-rgb', hexRgb(t.v.bg));
+    root.classList.toggle('theme-light', !!t.light);
+    appliedTheme = k;
+  }
+  // Taille du texte, mode performance, animations
+  const TEXT_SIZES = [[1, 'Normale'], [1.12, 'Grande'], [1.25, 'Très grande']];
+  function applyDisplay() {
+    root.style.setProperty('--ts', prefs.textSize || 1);
+    root.classList.toggle('perf', !!prefs.perf);
+    root.classList.toggle('reduce-motion', !!prefs.reduceMotion);
+  }
+  applyTheme(prefs.theme);
+  applyDisplay();
 
   /* ---------- Applis installées sur la TV (appli Android uniquement) ---------- */
   const hasBridge = () => !!(window.AndroidTV && typeof window.AndroidTV.launchApp === 'function');
@@ -157,7 +223,7 @@
     } catch { /* audio indisponible */ }
   }
 
-  /* ---------- Heure ---------- */
+  /* ---------- Heure et date ---------- */
   const fmtTime = (d) => d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', hour12: !prefs.h24 });
   const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
   const fmtDate = (d) => cap(d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }));
@@ -167,6 +233,10 @@
     $('date').textContent = fmtDate(now);
     $('saverTime').textContent = fmtTime(now);
     $('saverDate').textContent = fmtDate(now);
+    $('date').hidden = !prefs.showDate;
+    $('saverDate').hidden = !prefs.showDate;
+    // thème automatique : bascule clair / sombre selon l'heure
+    if (prefs.theme === 'auto' && !previewingTheme && resolvedTheme('auto') !== appliedTheme) applyTheme('auto');
   }
   tick(); setInterval(tick, 5000);
 
@@ -199,34 +269,40 @@
     85: 'Averses de neige', 86: 'Fortes averses de neige', 95: 'Orage', 96: 'Orage avec grêle', 99: 'Orage avec grêle'
   };
   const condition = (code) => CONDITIONS[code] || 'Conditions variables';
-  const city = () => D.cities[prefs.cityIndex] || D.cities[0];
-  let wx = null;
+  const city = () => prefs.city;
+  const cityLabel = (c = city()) => c.name + (c.postcode ? ` (${c.postcode})` : '');
+  const weatherKey = () => `${city().lat.toFixed(3)},${city().lon.toFixed(3)},${prefs.unit}`;
+  let wx = null, wxOffline = false;
 
   function renderWeather() {
+    $('weather').hidden = !prefs.showWeather;
     $('weatherCity').textContent = city().name;
-    const ok = wx && wx.city === city().name;
+    const ok = wx && wx.key === weatherKey();
     $('weatherTemp').textContent = ok ? Math.round(wx.t) + '°' : '--°';
     $('weatherIcon').innerHTML = ICONS[ok ? iconFor(wx.code, wx.day) : 'cloud'];
+    $('saverWeather').hidden = !prefs.showWeather;
     $('saverWeather').innerHTML = ok
       ? `${ICONS[iconFor(wx.code, wx.day)]}<span>${Math.round(wx.t)}° ${condition(wx.code).toLowerCase()}, ${city().name}</span>`
       : `<span>${city().name}</span>`;
     if (layer === 'weather') renderWeatherPanel();
   }
   async function updateWeather() {
+    // la dernière météo connue reste affichée, même hors connexion
     const cached = load('tv.weather', null);
-    wx = cached && cached.city === city().name && cached.days ? cached : null;
+    wx = cached && cached.key === weatherKey() && cached.days ? cached : null;
     renderWeather();
     try {
-      const c = city();
+      const c = city(), key = weatherKey();
       const url = `https://api.open-meteo.com/v1/forecast?latitude=${c.lat}&longitude=${c.lon}` +
         '&current=temperature_2m,apparent_temperature,weather_code,is_day,relative_humidity_2m,wind_speed_10m' +
-        '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&forecast_days=5&timezone=auto';
+        '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&forecast_days=5&timezone=auto' +
+        (prefs.unit === 'F' ? '&temperature_unit=fahrenheit' : '');
       const r = await fetch(url);
       if (!r.ok) throw new Error(r.status);
       const j = await r.json();
-      if (c !== city()) return; // la ville a changé pendant la requête
+      if (key !== weatherKey()) return; // la ville ou l'unité a changé pendant la requête
       wx = {
-        city: c.name, at: Date.now(),
+        key, city: c.name, at: Date.now(),
         t: j.current.temperature_2m, feel: j.current.apparent_temperature, code: j.current.weather_code,
         day: !!j.current.is_day, hum: j.current.relative_humidity_2m, wind: j.current.wind_speed_10m,
         days: j.daily.time.map((date, i) => ({
@@ -234,29 +310,35 @@
           min: j.daily.temperature_2m_min[i], rain: j.daily.precipitation_probability_max?.[i]
         }))
       };
+      wxOffline = false;
       save('tv.weather', wx); renderWeather();
-    } catch { /* hors ligne : on garde la dernière météo connue */ }
+    } catch {
+      wxOffline = true; // hors ligne : on garde la dernière météo connue
+      if (layer === 'weather') renderWeatherPanel();
+    }
   }
 
   function renderWeatherPanel() {
     const c = city();
-    const ok = wx && wx.city === c.name && wx.days;
+    const ok = wx && wx.key === weatherKey() && wx.days;
     if (!ok) {
-      $('weatherCard').innerHTML = `<div class="wx-head"><h2>Météo à ${c.name}</h2></div>
+      $('weatherCard').innerHTML = `<div class="wx-head"><h2>Météo à ${esc(c.name)}</h2></div>
         <div class="wx-empty">La météo n'est pas disponible pour le moment. Vérifiez que la TV est connectée à Internet, puis réessayez dans quelques minutes.</div>
         <div class="details-hint">Appuyez sur Retour pour fermer.</div>`;
       return;
     }
+    const at = new Date(wx.at);
+    const when = at.toDateString() === new Date().toDateString() ? `à ${fmtTime(at)}` : `le ${at.toLocaleDateString('fr-FR')} à ${fmtTime(at)}`;
     const dayName = (iso, i) => i === 0 ? "Aujourd'hui" : i === 1 ? 'Demain'
       : cap(new Date(iso + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'long' }));
     $('weatherCard').innerHTML = `
-      <div class="wx-head"><h2>Météo à ${c.name}</h2><span class="wx-upd">Mise à jour à ${fmtTime(new Date(wx.at))}</span></div>
+      <div class="wx-head"><h2>Météo à ${esc(c.name)}</h2><span class="wx-upd">${wxOffline ? `Hors ligne : dernière mise à jour ${when}` : `Mise à jour ${when}`}</span></div>
       <div class="wx-now">
         <div class="wx-icon">${ICONS[iconFor(wx.code, wx.day)]}</div>
         <div class="wx-temp">${Math.round(wx.t)}°</div>
         <div>
           <div class="wx-cond">${condition(wx.code)}</div>
-          <div class="wx-meta"><span>Ressenti <b>${Math.round(wx.feel)}°</b></span><span>Humidité <b>${Math.round(wx.hum)} %</b></span><span>Vent <b>${Math.round(wx.wind)} km/h</b></span></div>
+          <div class="wx-meta"><span>Ressenti <b>${Math.round(wx.feel)}°</b></span><span>Humidité <b>${Math.round(wx.hum)} %</b></span><span>Vent <b>${Math.round(wx.wind)} km/h</b></span><span>Unité <b>°${prefs.unit}</b></span></div>
         </div>
       </div>
       <div class="wx-days">${wx.days.slice(0, 5).map((d, i) => `
@@ -265,6 +347,21 @@
           ${d.rain != null ? `<div class="rain">Pluie ${Math.round(d.rain)} %</div>` : ''}</div>`).join('')}
       </div>
       <div class="details-hint">Appuyez sur Retour pour fermer.</div>`;
+  }
+
+  // Recherche d'une ville par nom ou code postal (géocodage Open-Meteo)
+  async function searchCities(q) {
+    q = q.trim();
+    const isPostcode = /^\d{4,5}$/.test(q);
+    const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=10&language=fr&format=json${isPostcode ? '&countryCode=FR' : ''}`;
+    const r = await fetch(url);
+    if (!r.ok) throw new Error(r.status);
+    const j = await r.json();
+    return (j.results || []).map(x => {
+      const pcs = x.postcodes || [];
+      return { name: x.name, postcode: isPostcode && pcs.includes(q) ? q : (pcs[0] || ''),
+        region: x.admin2 || x.admin1 || '', country: x.country || '', lat: x.latitude, lon: x.longitude };
+    });
   }
 
   /* ---------- Tuiles ---------- */
@@ -281,7 +378,7 @@
     if (a.custom) return `<span class="app-logo custom" style="--logo:${a.textColor}">${esc(a.name)}</span>`;
     return a.logo
       ? `<img class="app-logo-img app-logo-${a.id}" src="${a.logo}" alt="" draggable="false" data-name="${esc(a.name)}" onerror="tvLogoFallback(this)">`
-      : `<span class="app-logo ${a.logoStyle}" style="--logo:${a.logoColor}">${a.logoStyle === 'play' ? '<span class="play"></span>' : ''}${a.name}</span>`;
+      : `<span class="app-logo ${a.logoStyle}${String(a.logoColor).toUpperCase() === '#FFFFFF' ? ' logo-white' : ''}" style="--logo:${a.logoColor}">${a.logoStyle === 'play' ? '<span class="play"></span>' : ''}${a.name}</span>`;
   }
   // logo introuvable : on affiche le nom de l'appli à la place
   window.tvLogoFallback = (img) => { const t = document.createElement('span'); t.className = 'app-logo bold'; t.style.setProperty('--logo', '#fff'); t.textContent = img.dataset.name; img.replaceWith(t); };
@@ -297,17 +394,25 @@
     return t;
   }
   /* ---------- Rangées et navigation ---------- */
+  // NAV[0] = barre du haut, NAV[1] = boutons de la bannière (si elle est affichée), puis les rangées
   let ROWS = [], NAV = [], memory = [];
   let r = 1, c = 0, focusedEl = null;
-  let layer = 'home'; // home | settings | details | weather
+  let layer = 'home'; // home | settings | details | weather | network
+  const HERO = () => (prefs.banner ? 1 : -1);   // rangée de la bannière (-1 = pas de bannière)
+  const FIRST = () => (prefs.banner ? 2 : 1);   // première rangée de tuiles
+  const homeRow = () => (prefs.banner ? 1 : Math.min(1, NAV.length - 1));
+  const ROW_TITLES = { favoris: 'Favoris', films: 'Films & séries', musique: 'Musique', recent: 'Applis récentes', installed: 'Installées sur cette TV' };
 
+  function rowSource(key) {
+    if (key === 'recent') return recentApps();
+    if (key === 'installed') return installed.map(installedAsApp);
+    return appsInRow(key);
+  }
   function buildRows() {
     const rowsEl = $('rows'); rowsEl.innerHTML = '';
-    ROWS = [
-      ...ROW_DEFS.map(d => ({ title: d.title, key: d.key, items: appsInRow(d.key).map(appTile) })),
-      { title: 'Applis récentes', key: 'recent', items: recentApps().map(appTile) },
-      { title: 'Installées sur cette TV', key: 'installed', items: installed.map(x => appTile(installedAsApp(x))) }
-    ].filter(rw => rw.items.length);
+    ROWS = prefs.rowOrder.filter(k => !prefs.rowHidden.includes(k))
+      .map(k => ({ title: ROW_TITLES[k], key: k, items: rowSource(k).map(appTile) }))
+      .filter(rw => rw.items.length);
     ROWS.forEach(row => {
       const sec = el('section', 'row');
       sec.appendChild(el('h2', 'row-title', row.title));
@@ -316,17 +421,28 @@
       vp.appendChild(tr); sec.appendChild(vp); rowsEl.appendChild(sec);
       row.el = sec; row.track = tr; row.offset = 0;
     });
-    NAV = [{ items: [$('weather'), $('settingsBtn')] }, { items: [$('heroPlay'), $('heroMore')] }, ...ROWS];
-    memory = NAV.map((_, i) => (i === 0 ? 1 : 0));
+    const top = [$('netBtn'), ...(prefs.showWeather ? [$('weather')] : []), $('settingsBtn')];
+    NAV = [{ items: top }, ...(prefs.banner ? [{ items: [$('heroPlay'), $('heroMore')] }] : []), ...ROWS];
+    memory = NAV.map((_, i) => (i === 0 ? top.length - 1 : 0));
+    $('hero').hidden = !prefs.banner;
+    $('scroller').classList.toggle('no-banner', !prefs.banner);
+  }
+  // Redessine l'accueil après un changement de réglage, en gardant une sélection valide
+  function rebuildHome() {
+    buildRows();
+    heroItem = null;
+    const n = slides().length; slideIdx = Math.max(0, Math.min(slideIdx, n - 1));
+    if (n) showSlide(slideIdx, false);
+    r = Math.min(r, NAV.length - 1); c = Math.min(c, NAV[r].items.length - 1);
   }
 
   /* ---------- Bannière dynamique ---------- */
   let heroItem = null, slideIdx = 0, rotTimer = 0, heroTimer = 0, swapToken = 0;
-  const slides = () => { const f = appsInRow('favoris'); return f.length ? f : lib.items.map(it => getApp(it.id)); };
+  const rotationMs = () => (prefs.bannerSec || 10) * 1000;
+  const slides = () => { const f = appsInRow('favoris'); return (f.length ? f : lib.items.map(it => getApp(it.id))).filter(Boolean); };
 
   function setAmbient(col) {
-    const s = document.documentElement.style;
-    s.setProperty('--c1', col[0]); s.setProperty('--c2', col[1]); s.setProperty('--c3', col[2]);
+    root.style.setProperty('--c1', col[0]); root.style.setProperty('--c2', col[1]); root.style.setProperty('--c3', col[2]);
   }
   function renderHero(item, animate) {
     if (heroItem && heroItem.kind === item.kind && heroItem.id === item.id) return;
@@ -335,36 +451,34 @@
     const apply = () => {
       if (token !== swapToken) return;
       const a = getApp(item.source);
-      const isApp = item.kind === 'app';
-      $('heroText').classList.toggle('is-app', isApp);
-      $('heroLogo').innerHTML = isApp ? logoHTML(a) : '';
-      $('heroSource').innerHTML = isApp ? '' : `<img class="src-icon" src="${a.icon}" alt="">Sur ${a.name}`;
-      $('heroTags').innerHTML = (item.tags || []).filter(Boolean).map(t => `<span class="tag">${t}</span>`).join('');
+      $('heroText').classList.add('is-app');
+      $('heroLogo').innerHTML = a ? logoHTML(a) : '';
       $('heroTitle').textContent = item.title;
       $('heroDesc').textContent = item.desc;
       $('heroPlayLabel').textContent = item.action;
-      $('heroDots').classList.toggle('hidden', !isApp);
+      $('heroDots').classList.remove('hidden');
       $('heroText').classList.remove('swap');
     };
-    if (!animate || prefs.reduceMotion) return apply();
+    if (!animate || prefs.reduceMotion || prefs.perf) return apply();
     $('heroText').classList.add('swap');
     setTimeout(apply, 220);
   }
-  function rotationActive() { return layer === 'home' && r <= 1 && !saverOn && !splashOn && !document.hidden; }
+  function rotationActive() { return prefs.banner && layer === 'home' && r <= HERO() && !saverOn && !splashOn && !document.hidden; }
   function renderDots() {
     const list = slides();
-    $('heroDots').style.setProperty('--rot', ROTATION_MS + 'ms');
+    $('heroDots').style.setProperty('--rot', rotationMs() + 'ms');
     $('heroDots').innerHTML = list.map((_, i) => `<span class="dot-i${i === slideIdx ? ' on' : ''}"></span>`).join('');
     $('heroDots').classList.toggle('paused', !rotationActive());
   }
-  // (re)lance le minuteur de 10 s et l'animation du point actif
+  // (re)lance le minuteur de la bannière et l'animation du point actif
   function restartRotation() {
     clearTimeout(rotTimer);
     renderDots();
-    if (rotationActive()) rotTimer = setTimeout(() => showSlide(slideIdx + 1), ROTATION_MS);
+    if (rotationActive()) rotTimer = setTimeout(() => showSlide(slideIdx + 1), rotationMs());
   }
   function showSlide(i, animate = true) {
     const list = slides();
+    if (!list.length) return;
     slideIdx = ((i % list.length) + list.length) % list.length;
     renderHero(appItem(list[slideIdx]), animate);
     restartRotation();
@@ -379,19 +493,20 @@
     memory[r] = c;
     const target = items[c];
     if (focusedEl) focusedEl.classList.remove('focused');
+    if (!target) return;
     target.classList.add('focused'); focusedEl = target;
     if (fromKey && prevEl !== target) sound('move');
-    ROWS.forEach((row, i) => row.el.classList.toggle('active', NAV[r] === row));
+    ROWS.forEach(row => row.el.classList.toggle('active', NAV[r] === row));
 
     clearTimeout(heroTimer);
-    if (r >= 2 && target._item) {
+    if (r >= FIRST() && target._item) {
       const item = target._item;
       if (item.kind === 'app') { const k = slides().findIndex(a => a.id === item.id); if (k >= 0) slideIdx = k; }
       heroTimer = setTimeout(() => renderHero(item, true), fromKey ? 160 : 0);
-    } else if (r <= 1 && prevR >= 2) {
+    } else if (prefs.banner && r <= HERO() && prevR >= FIRST()) {
       showSlide(slideIdx);
     }
-    if (r <= 1 || prevR <= 1) restartRotation();
+    if (r <= HERO() || prevR <= HERO()) restartRotation();
     scrollTo();
   }
 
@@ -407,32 +522,34 @@
       row.offset = Math.max(0, Math.min(max, row.offset));
       row.track.style.transform = `translateX(${-row.offset}px)`;
     }
-    let y = 0; // vertical : la bannière s'efface sous la rangée Favoris
-    if (r > 2) y = Math.min(row.el.offsetTop - 190, $('scroller').scrollHeight - 1080);
+    let y = 0; // vertical : la bannière s'efface sous la première rangée
+    const deep = r > FIRST();
+    if (deep) y = Math.max(0, Math.min(row.el.offsetTop - 190, $('scroller').scrollHeight - 1080));
     $('scroller').style.transform = `translateY(${-y}px)`;
     ROWS.forEach(rw => { rw.el.style.opacity = rw.el.offsetTop + rw.el.offsetHeight - y < 260 ? 0 : 1; });
-    $('hero').style.opacity = r > 2 ? 0 : 1;
-    $('stage').classList.toggle('scrolled', r > 2);
+    $('hero').style.opacity = deep ? 0 : 1;
+    $('stage').classList.toggle('scrolled', deep);
   }
 
   function move(dir) {
     const n = NAV[r].items.length;
-    const heroIsApp = heroItem && heroItem.kind === 'app';
+    const onHero = r === HERO() && heroItem && heroItem.kind === 'app';
     if (dir === 'left') {
-      if (r === 1 && c === 0 && heroIsApp) { sound('move'); return showSlide(slideIdx - 1); }
+      if (onHero && c === 0) { sound('move'); return showSlide(slideIdx - 1); }
       if (c === 0) return sound('edge');
       return focus(r, c - 1);
     }
     if (dir === 'right') {
-      if (r === 1 && c === n - 1 && heroIsApp) { sound('move'); return showSlide(slideIdx + 1); }
+      if (onHero && c === n - 1) { sound('move'); return showSlide(slideIdx + 1); }
       if (c === n - 1) return sound('edge');
       return focus(r, c + 1);
     }
-    if (dir === 'up') { if (r === 0) return sound('edge'); return focus(r - 1, r - 1 === 1 ? 0 : memory[r - 1]); }
-    if (dir === 'down') { if (r === NAV.length - 1) return sound('edge'); return focus(r + 1, r + 1 === 1 ? 0 : memory[r + 1]); }
+    if (dir === 'up') { if (r === 0) return sound('edge'); return focus(r - 1, r - 1 === HERO() ? 0 : memory[r - 1]); }
+    if (dir === 'down') { if (r === NAV.length - 1) return sound('edge'); return focus(r + 1, r + 1 === HERO() ? 0 : memory[r + 1]); }
   }
 
   function activate(target) {
+    if (target === $('netBtn')) return openNetwork();
     if (target === $('weather')) return openWeather();
     if (target === $('settingsBtn')) return openSettings();
     if (target === $('heroMore')) return openDetails(heroItem);
@@ -488,7 +605,7 @@
     clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
   }
 
-  /* ---------- Fenêtres : détail et météo ---------- */
+  /* ---------- Fenêtres : détail, météo, réseau ---------- */
   function openLayer(id, name) { $(id).classList.add('open'); $(id).setAttribute('aria-hidden', 'false'); layer = name; clearTimeout(rotTimer); renderDots(); }
   function closeLayer(id) { $(id).classList.remove('open'); $(id).setAttribute('aria-hidden', 'true'); layer = 'home'; sound('back'); restartRotation(); }
   function openDetails(item) {
@@ -498,65 +615,107 @@
   }
   function openWeather() { sound('select'); openLayer('weatherPanel', 'weather'); renderWeatherPanel(); }
 
-  /* ---------- Paramètres ---------- */
-  const sleepLabel = () => prefs.sleepMin ? `${prefs.sleepMin} min` : 'Jamais';
+  // Réseau : nom du Wi-Fi, force du signal, état d'Internet et raccourci vers les réglages de la TV
+  let netIdx = 0;
+  function netActions() {
+    const acts = [];
+    if (hasBridge() && typeof window.AndroidTV.openNetworkSettings === 'function') {
+      acts.push({ label: 'Ouvrir les réglages réseau de la TV', run: () => window.AndroidTV.openNetworkSettings() });
+      if (net.type === 'wifi' && net.connected && !net.ssid && typeof window.AndroidTV.requestWifiName === 'function')
+        acts.push({ label: 'Afficher le nom du réseau', run: () => window.AndroidTV.requestWifiName() });
+    }
+    acts.push({ label: 'Fermer', run: () => closeLayer('netPanel') });
+    return acts;
+  }
+  function renderNetPanel() {
+    const lines = [];
+    if (!net.connected) lines.push('<span class="bad">Aucune connexion réseau</span>');
+    else if (net.type === 'ethernet') lines.push('Connexion : <b>câble Ethernet</b>');
+    else if (net.type === 'wifi') {
+      lines.push(net.ssid ? `Réseau Wi-Fi : <b>${esc(net.ssid)}</b>`
+        : net.fromApp ? 'Réseau Wi-Fi : <b>nom masqué par Android</b>' : 'Connexion : <b>Wi-Fi</b>');
+      if (net.fromApp) lines.push(`Signal : <b>${SIGNAL[net.level] || 'Inconnu'}</b> (${net.level} barre${net.level > 1 ? 's' : ''} sur 4)`);
+    } else lines.push(`Connexion : <b>${esc(net.type)}</b>`);
+    lines.push(net.online ? 'Internet : <b>connecté</b>' : '<span class="bad">Pas de connexion Internet</span>');
+    if (!net.online && wx) lines.push(`Météo : dernière mise à jour à ${fmtTime(new Date(wx.at))}`);
+    if (!net.fromApp) lines.push('<span>Le nom du réseau et la force du signal sont visibles dans l’appli Android TV.</span>');
+    const acts = netActions();
+    netIdx = Math.min(netIdx, acts.length - 1);
+    $('netCard').innerHTML = `<h2>Réseau</h2><div class="net-lines">${lines.map(l => `<div>${l}</div>`).join('')}</div>
+      <ul class="net-actions">${acts.map((a, i) => `<li class="setting${i === netIdx ? ' focused' : ''}" data-i="${i}"><span>${a.label}</span></li>`).join('')}</ul>`;
+  }
+  function openNetwork() { sound('select'); netIdx = 0; readNetwork(); openLayer('netPanel', 'network'); renderNetPanel(); }
+  function networkKey(k) {
+    const acts = netActions();
+    if (k === 'back') return closeLayer('netPanel');
+    if (k === 'up' || k === 'down') { const n = Math.max(0, Math.min(acts.length - 1, netIdx + (k === 'up' ? -1 : 1))); sound(n === netIdx ? 'edge' : 'move'); netIdx = n; return renderNetPanel(); }
+    if (k === 'ok') { sound('select'); acts[netIdx].run(); if (layer === 'network') renderNetPanel(); }
+  }
+
+  /* ---------- Paramètres (menu des rubriques à gauche, réglages à droite) ---------- */
   const SWATCHES = ['#E50914', '#FF6B00', '#F5C518', '#1DB954', '#00A3A3', '#1A73E8', '#6C3BFF', '#E0218A', '#5A5F6B', '#141414'];
   const ROW_KEYS = ROW_DEFS.map(d => d.key);
+  const MARGINS = [0, 5, 10, 15, 20];
+  const BANNER_SECS = [6, 10, 15, 20];
+  const SAVER_STYLES = [['photos', 'Photos'], ['paysages', 'Paysages dessinés'], ['noir', 'Horloge sur fond noir']];
   const switchHTML = (on) => `<span class="switch ${on ? 'on' : ''}"></span>`;
   const mini = (a) => `<span class="mini" style="--tc2:${a.colors[1]};--tc3:${a.colors[2]}">${logoHTML(a)}</span>`;
   const cycle = (list, cur, d) => list[(list.indexOf(cur) + d + list.length) % list.length];
-
-  const DISPLAY_SCALES = [80, 85, 90, 95, 100];
-  function screenInfo() {
-    try {
-      const d = JSON.parse(window.AndroidTV.displayInfo());
-      return `${d.widthPx} × ${d.heightPx} px, densité ${String(Math.round(d.density * 100) / 100).replace('.', ',')}`;
-    } catch { return ''; }
-  }
-  const MAIN = [
-    { label: 'Mes applis', value: () => `${lib.items.length} ›`, go: 'manage' },
-    { label: 'Ajouter une appli', value: () => '›', go: 'add' },
-    { label: 'Ville pour la météo', value: () => `‹ ${city().name} ›`,
-      step: (d) => { prefs.cityIndex = (prefs.cityIndex + d + D.cities.length) % D.cities.length; updateWeather(); } },
-    { label: 'Paramètres de la TV', value: () => '›', show: () => hasBridge(), act: () => window.AndroidTV.openSystemSettings() },
-    { label: 'Ouvrir les applis installées', toggle: 'openApps', show: () => !hasBridge() },
-    { label: 'Sons de navigation', toggle: 'sounds' },
-    { label: 'Mise en veille', value: () => `‹ ${sleepLabel()} ›`,
-      step: (d) => { prefs.sleepMin = cycle(SLEEP_CHOICES, prefs.sleepMin, d); resetIdle(); } },
-    { label: 'Taille de l’affichage', value: () => `‹ ${prefs.displayScale || 100} % ›`,
-      step: (d) => { prefs.displayScale = cycle(DISPLAY_SCALES, prefs.displayScale || 100, d); fit(); } },
-    { label: 'Écran', show: () => hasBridge() && typeof window.AndroidTV.displayInfo === 'function', value: () => screenInfo(), act: () => {} },
-    { label: 'Heure sur 24 h', toggle: 'h24', after: tick },
-    { label: 'Réduire les animations', toggle: 'reduceMotion', after: applyMotion },
-    { label: 'Plein écran', show: () => !hasBridge(), value: () => document.fullscreenElement ? 'Activé' : 'Désactivé',
-      step: () => {
-        const pr = document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.();
-        Promise.resolve(pr).catch(() => toast('Plein écran indisponible dans ce navigateur')).finally(() => setTimeout(renderSettings, 300));
-      } }
+  const svg = (p) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${p}</svg>`;
+  const CATS = [
+    { key: 'accueil', label: 'Accueil', icon: svg('<path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/>') },
+    { key: 'applis', label: 'Applis', icon: svg('<rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/>') },
+    { key: 'meteo', label: 'Météo', icon: svg('<path d="M7 18h10a4 4 0 0 0 .4-8 6 6 0 0 0-11.5 1.5A3.3 3.3 0 0 0 7 18z"/>') },
+    { key: 'affichage', label: 'Affichage', icon: svg('<rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/>') },
+    { key: 'veille', label: 'Veille', icon: svg('<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>') },
+    { key: 'heure', label: 'Date et heure', icon: svg('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>') },
+    { key: 'son', label: 'Son', icon: svg('<path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11"/>') },
+    { key: 'apropos', label: 'À propos', icon: svg('<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/>') }
   ];
 
-  const nav = { page: 'main', idx: 0 };
+  let pane = 'menu', catIdx = 0;
+  const nav = { page: 'cat-accueil', idx: 0 };
   const stack = [];
-  let target = null, grabId = null, confirmRemove = false;
+  let target = null, grab = null, confirmRemove = false;
   const newDraft = () => ({ name: '', link: '', color: SWATCHES[5], row: 'favoris' });
   let draft = newDraft();
+  const citySearch = { q: '', results: null, status: '' };
+  let upd = { state: 'idle', remote: null, pct: 0 };
 
+  // Lignes types : interrupteur, valeur à faire défiler (‹ ›), lien vers une sous-page
+  const tog = (label, key, after) => {
+    const flip = () => { prefs[key] = !prefs[key]; savePrefs(); after && after(); };
+    return { label, value: switchHTML(prefs[key]), ok: flip, right: flip };
+  };
+  const cyc = (label, list, get, set, fmt) => ({
+    label, value: `‹ ${fmt(get())} ›`,
+    ok: () => set(cycle(list, get(), 1)), right: () => set(cycle(list, get(), 1)), left: () => set(cycle(list, get(), -1))
+  });
+  const lnk = (label, value, page, idx = 0) => ({ label, value: `${value ? esc(value) + ' ' : ''}›`, ok: () => go(page, idx), right: () => go(page, idx) });
+
+  function enterCat(i) {
+    const def = pageDef(); def.onLeave && def.onLeave();
+    catIdx = i; stack.length = 0; grab = null; confirmRemove = false;
+    Object.assign(nav, { page: 'cat-' + CATS[i].key, idx: 0 });
+    $('settingsList').scrollTop = 0;
+  }
   function go(page, idx = 0) {
     stack.push({ page: nav.page, idx: nav.idx });
-    Object.assign(nav, { page, idx }); grabId = null; confirmRemove = false;
+    Object.assign(nav, { page, idx }); grab = null; confirmRemove = false;
     $('settingsList').scrollTop = 0; renderSettings();
+    const def = pageDef(); def.onEnter && def.onEnter();
   }
   function goBack() {
+    const def = pageDef(); def.onLeave && def.onLeave();
+    document.activeElement?.blur?.();
     const prev = stack.pop();
-    if (!prev) return closeSettings();
-    Object.assign(nav, prev); grabId = null; confirmRemove = false;
-    sound('back'); $('settingsList').scrollTop = 0; renderSettings();
+    grab = null; confirmRemove = false; sound('back');
+    if (!prev) { pane = 'menu'; return renderSettings(); }
+    Object.assign(nav, prev);
+    $('settingsList').scrollTop = 0; renderSettings();
   }
-  function libChanged() { // enregistre et redessine l'accueil derrière le panneau
-    saveLib(); buildRows();
-    const n = slides().length; slideIdx = Math.min(slideIdx, n - 1); heroItem = null; showSlide(slideIdx, false);
-    r = Math.min(r, NAV.length - 1);
-  }
+  function startGrab(id, moveFn) { grab = { id, move: moveFn }; sound('select'); }
+  function libChanged() { saveLib(); rebuildHome(); }
 
   // Lien saisi : adresse web ou nom de paquet Android
   function parseLink(v) {
@@ -576,18 +735,23 @@
     return l.url ? `Sera ouvert comme site web : ${l.url}` : `Sera ouvert comme appli Android : ${l.package}`;
   };
   const draftApp = () => customApp({ id: 'apercu', name: draft.name.trim() || 'Mon appli', color: draft.color });
-
   function addApp(id, row) {
     lib.items.push({ id, row }); libChanged();
     toast(`${getApp(id).name} ajoutée à ${rowTitle(row)}`);
   }
   function moveGrabbed(dir) {
-    const i = lib.items.findIndex(it => it.id === grabId), row = lib.items[i].row;
+    const i = lib.items.findIndex(it => it.id === grab.id), row = lib.items[i].row;
     let j = i + dir;
     while (j >= 0 && j < lib.items.length && lib.items[j].row !== row) j += dir;
     if (j < 0 || j >= lib.items.length) return sound('edge');
     [lib.items[i], lib.items[j]] = [lib.items[j], lib.items[i]];
     sound('move'); libChanged();
+  }
+  function moveRow(dir) {
+    const i = prefs.rowOrder.indexOf(grab.id), j = i + dir;
+    if (j < 0 || j >= prefs.rowOrder.length) return sound('edge');
+    [prefs.rowOrder[i], prefs.rowOrder[j]] = [prefs.rowOrder[j], prefs.rowOrder[i]];
+    sound('move'); savePrefs(); rebuildHome();
   }
   function submitCustom() {
     const name = draft.name.trim(), link = parseLink(draft.link);
@@ -599,19 +763,226 @@
     draft = newDraft();
     goBack();
   }
+  function screenInfo() {
+    try {
+      const d = JSON.parse(window.AndroidTV.displayInfo());
+      return `${d.widthPx} × ${d.heightPx} px, densité ${String(Math.round(d.density * 100) / 100).replace('.', ',')}`;
+    } catch { return ''; }
+  }
+  async function runCitySearch() {
+    const q = citySearch.q.trim();
+    if (q.length < 2) { citySearch.status = 'Tapez au moins 2 caractères.'; return renderSettings(); }
+    citySearch.status = 'Recherche en cours…'; citySearch.results = null; renderSettings();
+    try {
+      citySearch.results = await searchCities(q);
+      citySearch.status = citySearch.results.length ? `${citySearch.results.length} résultat${citySearch.results.length > 1 ? 's' : ''}`
+        : 'Aucune ville trouvée. Vérifiez l’orthographe ou le code postal.';
+    } catch {
+      citySearch.status = net.online ? 'La recherche n’a pas abouti. Réessayez dans un instant.' : 'Pas de connexion Internet : recherche impossible pour le moment.';
+    }
+    if (layer === 'settings' && nav.page === 'city') {
+      if (citySearch.results && citySearch.results.length) nav.idx = 2; // premier résultat
+      renderSettings();
+    }
+  }
+  function chooseCity(x) {
+    prefs.city = { name: x.name, postcode: x.postcode, region: x.region, lat: x.lat, lon: x.lon };
+    savePrefs(); wx = null; updateWeather();
+    toast(`Météo : ${cityLabel()}`);
+    citySearch.results = null; citySearch.status = '';
+    goBack();
+  }
+
+  // Mise à jour de l'appli Android (À propos)
+  const updLabel = () => ({
+    idle: '›', checking: 'Recherche…', uptodate: 'Vous avez la dernière version',
+    available: upd.remote ? `Version ${upd.remote.versionName} disponible` : '', error: 'Recherche impossible',
+    downloading: `Téléchargement ${upd.pct} %`, installing: 'Installation…', needperm: 'Autorisation requise',
+    web: upd.remote ? `Appli Android : version ${upd.remote.versionName}` : 'Version web à jour'
+  }[upd.state] || '›');
+  async function checkUpdate() {
+    upd = { state: 'checking', remote: null, pct: 0 }; renderSettings();
+    try {
+      const res = await fetch(SITE + 'version.json?t=' + Date.now(), { cache: 'no-store' });
+      if (!res.ok) throw new Error(res.status);
+      const remote = await res.json();
+      const local = hasBridge() && typeof window.AndroidTV.versionCode === 'function' ? Number(window.AndroidTV.versionCode()) : null;
+      upd = { state: local == null ? 'web' : remote.versionCode > local ? 'available' : 'uptodate', remote, pct: 0 };
+    } catch { upd = { state: 'error', remote: null, pct: 0 }; }
+    if (layer === 'settings') renderSettings();
+  }
+  function installUpdate() {
+    if (!hasBridge() || typeof window.AndroidTV.installUpdate !== 'function') return toast('Mise à jour possible seulement depuis l’appli Android TV.');
+    upd.state = 'downloading'; upd.pct = 0; renderSettings();
+    window.AndroidTV.installUpdate((upd.remote && upd.remote.apk) || SITE + 'tv.apk');
+  }
+  window.tvUpdateProgress = (p) => {
+    if (p >= 0 && p < 100) { upd.state = 'downloading'; upd.pct = Math.round(p); }
+    else if (p >= 100) upd.state = 'installing';
+    else if (p === -2) { upd.state = 'needperm'; toast('Autorisez « Accueil TV » à installer des applis dans la fenêtre ouverte, puis relancez l’installation.'); }
+    else { upd.state = 'error'; toast('Le téléchargement de la mise à jour a échoué. Réessayez.'); }
+    if (layer === 'settings' && nav.page === 'cat-apropos') renderSettings();
+  };
+
+  // Vignettes : thèmes et fonds d'écran
+  function themeSwatch(k) {
+    if (k === 'auto') {
+      const a = THEMES.clair.v, b = THEMES.nuit.v;
+      return `<span class="theme-sw" style="background:linear-gradient(90deg, ${a.bg} 50%, ${b.bg} 50%)"><i style="background:${a.card}"></i><b style="background:${b.accent}"></b></span>`;
+    }
+    const v = THEMES[k].v;
+    return `<span class="theme-sw" style="background:${v.grad}"><i style="background:${v.card}"></i><b style="background:${v.accent}"></b></span>`;
+  }
+  const wallThumb = (k) => k === 'none' ? '<span class="wall-mini none"></span>'
+    : `<img class="wall-mini" src="${wallPath(k === 'random' ? 'ciel' : k, 1, true)}" alt="">`;
+  function wallPreview(k) {
+    if (!k || k === 'none') return '<div class="pv-walls"><div class="pv-none">Dégradé du thème, sans photo</div></div>';
+    const srcs = k === 'random' ? ['nature', 'ocean', 'ville'].map((c, i) => wallPath(c, i + 2, true)) : [1, 2, 3].map(n => wallPath(k, n, true));
+    return `<div class="pv-walls">${srcs.map(s => `<img src="${s}" alt="">`).join('')}</div>`;
+  }
+  const homePreview = () => `<div class="pv-home"><div class="pv-top">20:30<span>${esc(city().name)}</span></div>
+    <div class="pv-title">Favoris</div><div class="pv-row"><span class="pv-tile on"></span><span class="pv-tile"></span><span class="pv-tile"></span><span class="pv-tile"></span></div></div>`;
 
   // Chaque page : titre, aide et lignes ({ label, value, ok, left, right } ; header = titre de section)
   function pageDef() {
     switch (nav.page) {
-      case 'main': return {
-        title: 'Paramètres', hint: 'Flèches pour choisir, OK pour modifier, Retour pour fermer.',
-        entries: MAIN.filter(m => !m.show || m.show()).map(m => ({
-          label: m.label, value: m.toggle ? switchHTML(prefs[m.toggle]) : m.value(),
-          ok: () => m.act ? m.act() : m.go ? go(m.go) : mainStep(m, 1),
-          right: m.act ? null : m.go ? () => go(m.go) : () => mainStep(m, 1),
-          left: m.go || m.toggle || m.act ? null : () => mainStep(m, -1)
-        }))
+      case 'cat-accueil': return {
+        title: 'Accueil', hint: 'OK pour modifier, Gauche et Droite pour changer une valeur.',
+        entries: [
+          lnk('Rangées de l’accueil', `${prefs.rowOrder.filter(k => !prefs.rowHidden.includes(k)).length} affichées`, 'rows'),
+          tog('Bannière qui met en avant les applis', 'banner', () => { rebuildHome(); }),
+          cyc('Vitesse de la bannière', BANNER_SECS, () => prefs.bannerSec, v => { prefs.bannerSec = v; savePrefs(); restartRotation(); }, v => `une appli toutes les ${v} s`),
+          lnk('Fond d’écran', wallLabel(prefs.wallCat), 'wallpaper', WALL_CHOICES.findIndex(w => w.key === prefs.wallCat))
+        ]
       };
+      case 'cat-applis': return {
+        title: 'Applis', hint: 'OK pour ouvrir.',
+        entries: [
+          lnk('Ajouter une appli', '', 'add'),
+          lnk('Mes applis : retirer, réordonner', `${lib.items.length}`, 'manage'),
+          lnk('Applis installées sur la TV', hasBridge() ? `${installed.length}` : '', 'installedList'),
+          ...(hasBridge() ? [] : [tog('Ouvrir les applis installées (navigateur)', 'openApps')])
+        ]
+      };
+      case 'cat-meteo': return {
+        title: 'Météo', hint: 'OK pour modifier.',
+        entries: [
+          lnk('Ville', cityLabel(), 'city'),
+          cyc('Unité', ['C', 'F'], () => prefs.unit, v => { prefs.unit = v; savePrefs(); wx = null; updateWeather(); }, v => (v === 'C' ? '°C (Celsius)' : '°F (Fahrenheit)')),
+          tog('Afficher la météo', 'showWeather', () => { renderWeather(); rebuildHome(); })
+        ]
+      };
+      case 'cat-affichage': return {
+        title: 'Affichage', hint: 'Gauche et Droite pour changer une valeur, OK pour ouvrir.',
+        entries: [
+          lnk('Thème', THEMES[prefs.theme] ? THEMES[prefs.theme].label : '', 'theme', THEME_KEYS.indexOf(prefs.theme)),
+          lnk('Fond d’écran', wallLabel(prefs.wallCat), 'wallpaper', WALL_CHOICES.findIndex(w => w.key === prefs.wallCat)),
+          cyc('Taille du texte', TEXT_SIZES.map(t => t[0]), () => prefs.textSize, v => { prefs.textSize = v; savePrefs(); applyDisplay(); },
+            v => (TEXT_SIZES.find(t => t[0] === v) || TEXT_SIZES[0])[1]),
+          tog('Mode performance (moins d’effets)', 'perf', applyDisplay),
+          cyc('Marge de l’écran (si les bords sont coupés)', MARGINS, () => 100 - (prefs.displayScale || 100),
+            v => { prefs.displayScale = 100 - v; savePrefs(); fit(); }, v => (v ? `${v} %` : 'Aucune')),
+          ...(hasBridge() && typeof window.AndroidTV.displayInfo === 'function' ? [{ label: 'Écran', value: screenInfo(), cls: 'info' }] : []),
+          tog('Réduire les animations', 'reduceMotion', applyDisplay),
+          ...(hasBridge() ? [] : [{ label: 'Plein écran', value: document.fullscreenElement ? 'Activé' : 'Désactivé', ok: () => {
+            const pr = document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.();
+            Promise.resolve(pr).catch(() => toast('Plein écran indisponible dans ce navigateur')).finally(() => setTimeout(renderSettings, 300));
+          } }])
+        ]
+      };
+      case 'cat-veille': return {
+        title: 'Veille', hint: 'Gauche et Droite pour changer une valeur.',
+        entries: [
+          cyc('Délai avant l’écran de veille', SLEEP_CHOICES, () => prefs.sleepMin, v => { prefs.sleepMin = v; savePrefs(); resetIdle(); }, v => (v ? `${v} min` : 'Jamais')),
+          cyc('Style de l’écran de veille', SAVER_STYLES.map(s => s[0]), () => prefs.saverStyle, v => { prefs.saverStyle = v; savePrefs(); scenesFor = ''; },
+            v => (SAVER_STYLES.find(s => s[0] === v) || SAVER_STYLES[0])[1]),
+          { label: 'Voir l’écran de veille maintenant', value: '›', ok: () => { closeSettings(); setTimeout(startSaver, 350); } }
+        ]
+      };
+      case 'cat-heure': return {
+        title: 'Date et heure', hint: 'OK pour activer ou désactiver.',
+        entries: [tog('Heure sur 24 h', 'h24', tick), tog('Afficher la date', 'showDate', tick)]
+      };
+      case 'cat-son': return {
+        title: 'Son', hint: 'OK pour activer ou désactiver.',
+        entries: [tog('Sons de navigation', 'sounds')]
+      };
+      case 'cat-apropos': {
+        const ver = hasBridge() && typeof window.AndroidTV.version === 'function' ? window.AndroidTV.version() : '';
+        const entries = [
+          { label: 'Version', value: ver ? `Accueil TV ${esc(ver)}` : 'Version web (toujours à jour)', cls: 'info' },
+          { label: 'Rechercher une mise à jour', value: updLabel(), ok: checkUpdate }
+        ];
+        if (hasBridge() && (upd.state === 'available' || upd.state === 'needperm' || upd.state === 'error' && upd.remote))
+          entries.push({ label: `Installer la version ${upd.remote.versionName}`, cls: 'primary', value: '', ok: installUpdate });
+        if (hasBridge()) entries.push({ label: 'Paramètres Android de la TV', value: '›', ok: () => window.AndroidTV.openSystemSettings() });
+        entries.push({ label: 'Photos des fonds d’écran', value: 'Unsplash, licence libre', cls: 'info' });
+        return { title: 'À propos', hint: 'OK sur « Rechercher une mise à jour » pour vérifier la dernière version.', entries };
+      }
+
+      case 'rows': return {
+        title: 'Rangées de l’accueil',
+        hint: grab ? `Haut et Bas pour déplacer « ${ROW_TITLES[grab.id]} », OK pour la poser.` : 'OK : afficher ou masquer. Droite : changer l’ordre. Retour : terminer.',
+        entries: prefs.rowOrder.map(k => {
+          const grabbed = grab && grab.id === k, empty = !rowSource(k).length;
+          return { id: k, cls: grabbed ? 'grab' : '', label: `<span>${ROW_TITLES[k]}${empty ? ' <small class="note">(vide pour l’instant)</small>' : ''}</span>`,
+            value: grabbed ? 'Haut / Bas' : switchHTML(!prefs.rowHidden.includes(k)),
+            ok: () => {
+              if (prefs.rowHidden.includes(k)) prefs.rowHidden = prefs.rowHidden.filter(x => x !== k);
+              else if (prefs.rowOrder.length - prefs.rowHidden.length <= 1) return toast('Gardez au moins une rangée affichée.');
+              else prefs.rowHidden.push(k);
+              savePrefs(); rebuildHome();
+            },
+            right: () => startGrab(k, moveRow) };
+        })
+      };
+      case 'wallpaper': return {
+        title: 'Fond d’écran', preview: (e) => wallPreview(e && e.wall !== undefined ? e.wall : prefs.wallCat),
+        hint: 'OK pour choisir. Les mêmes photos servent à l’écran de veille.',
+        entries: [
+          ...WALL_CHOICES.map(w => ({ wall: w.key, cls: prefs.wallCat === w.key ? 'check' : '',
+            label: `${wallThumb(w.key)}<span>${w.label}</span>`, value: prefs.wallCat === w.key ? 'Actif' : '',
+            ok: () => { prefs.wallCat = w.key; savePrefs(); applyWallpaper(); scenesFor = ''; } })),
+          cyc('Changement de photo', WALL_EVERY, () => prefs.wallEvery, v => { prefs.wallEvery = v; savePrefs(); applyWallpaper(); },
+            v => (v ? `toutes les ${v} min` : 'fixe')),
+          ...(prefs.wallCat !== 'none' ? [{ label: 'Photo suivante', value: '›', ok: () => { nextWallpaper(); toast('Nouvelle photo'); } }] : [])
+        ]
+      };
+      case 'theme': return {
+        title: 'Thème', preview: () => homePreview(),
+        hint: 'Déplacez-vous pour voir chaque thème en direct. OK pour le garder, Retour pour annuler.',
+        onMove: (e) => { if (e && e.themeKey) { previewingTheme = true; applyTheme(e.themeKey); } },
+        onLeave: () => { previewingTheme = false; applyTheme(prefs.theme); },
+        entries: THEME_KEYS.map(k => ({ themeKey: k, cls: prefs.theme === k ? 'check' : '',
+          label: `${themeSwatch(k)}<span>${THEMES[k].label}${THEMES[k].note ? ` <small class="note">${THEMES[k].note}</small>` : ''}</span>`,
+          value: prefs.theme === k ? 'Actif' : '',
+          ok: () => { prefs.theme = k; savePrefs(); previewingTheme = false; applyTheme(k); toast(`Thème « ${THEMES[k].label} » appliqué`); } }))
+      };
+      case 'city': {
+        const c = city();
+        const entries = [
+          { header: true, label: `Ville actuelle : ${esc(cityLabel())}${c.region ? ', ' + esc(c.region) : ''}` },
+          { field: 'q', store: citySearch, label: 'Nom de ville ou code postal', placeholder: 'Exemple : Sedan ou 08200',
+            ok: () => focusField('q'), onEnter: runCitySearch },
+          { label: 'Rechercher', cls: 'primary', value: '', ok: runCitySearch }
+        ];
+        if (citySearch.status) entries.push({ header: true, label: esc(citySearch.status) });
+        (citySearch.results || []).forEach(x => entries.push({ label: esc(x.name),
+          value: esc([x.postcode, x.region, x.country && x.country !== 'France' ? x.country : ''].filter(Boolean).join(', ')),
+          ok: () => chooseCity(x) }));
+        return { title: 'Ville pour la météo', hint: 'OK sur le champ pour écrire, puis OK sur « Rechercher ». Choisissez ensuite la bonne ville.', entries };
+      }
+      case 'installedList': {
+        if (!hasBridge()) return { title: 'Applis installées sur la TV', hint: '',
+          entries: [{ header: true, label: 'La liste des applis installées est disponible dans l’appli Android TV.' }] };
+        const homePkgs = new Set(lib.items.map(it => getApp(it.id)).filter(Boolean).flatMap(pkgsOf));
+        return { title: 'Applis installées sur la TV', hint: 'OK pour ajouter une appli à l’accueil.',
+          entries: installed.length ? installed.map(x => {
+            const onHome = homePkgs.has(x.package);
+            return { label: `${mini(installedAsApp(x))}<span>${esc(x.name)}</span>`, value: onHome ? 'Sur l’accueil' : 'Ajouter ›',
+              ok: () => { if (onHome) return toast(`${x.name} est déjà sur l’accueil.`); target = 'inst:' + x.package; go('addRow', 0); } };
+          }) : [{ header: true, label: 'Aucune appli trouvée.' }] };
+      }
       case 'manage': {
         const entries = [];
         ROW_DEFS.forEach(d => {
@@ -619,14 +990,14 @@
           if (!items.length) return;
           entries.push({ header: true, label: d.title });
           items.forEach(it => {
-            const a = getApp(it.id), grabbed = grabId === it.id;
+            const a = getApp(it.id), grabbed = grab && grab.id === it.id;
             entries.push({ id: it.id, cls: grabbed ? 'grab' : '', label: `${mini(a)}<span>${esc(a.name)}</span>`,
               value: grabbed ? 'Haut / Bas' : '›', ok: () => { target = it.id; go('actions'); },
-              right: () => { grabId = it.id; sound('select'); } });
+              right: () => startGrab(it.id, moveGrabbed) });
           });
         });
         return { title: 'Mes applis', entries,
-          hint: grabId ? `Haut et Bas pour déplacer ${getApp(grabId).name} dans sa rangée, OK pour la poser.`
+          hint: grab ? `Haut et Bas pour déplacer ${getApp(grab.id).name} dans sa rangée, OK pour la poser.`
             : 'OK : options de l’appli. Droite : déplacer. Retour : terminer.' };
       }
       case 'actions': {
@@ -636,13 +1007,13 @@
         return { title: a.name, hint: 'Gauche et Droite pour changer de rangée. Retour pour revenir.',
           entries: [
             { label: 'Rangée', value: `‹ ${rowTitle(it.row)} ›`, ok: () => setRow(1), right: () => setRow(1), left: () => setRow(-1) },
-            { label: 'Changer l’ordre', value: '›', ok: () => { goBack(); grabId = target; renderSettings(); } },
+            { label: 'Changer l’ordre', value: '›', ok: () => { goBack(); startGrab(target, moveGrabbed); renderSettings(); } },
             { label: confirmRemove ? 'Appuyez de nouveau sur OK pour retirer' : 'Retirer de l’accueil', cls: 'danger', value: '',
               ok: () => {
                 if (!confirmRemove) { confirmRemove = true; return; }
                 if (lib.items.length <= 1) { confirmRemove = false; return toast('Gardez au moins une appli sur l’accueil.'); }
                 lib.items = lib.items.filter(x => x.id !== target);
-                if (a.custom) lib.custom = lib.custom.filter(c => c.id !== target);
+                if (a.custom && !a.installed) lib.custom = lib.custom.filter(c => c.id !== target);
                 libChanged(); toast(`${a.name} retirée de l’accueil`); goBack();
               } }
           ] };
@@ -652,15 +1023,11 @@
           .sort((x, y) => isInstalled(y) - isInstalled(x)); // applis présentes sur la TV en premier
         const entries = [{ label: 'Appli personnalisée', value: 'Créer ›', cls: 'special', ok: () => go('custom') }];
         if (hasBridge()) {
-          // applis de la TV qui ne sont ni sur l'accueil ni dans la liste des applis populaires
-          const known = new Set([...BUILTIN.flatMap(pkgsOf), ...lib.items.map(it => getApp(it.id)).flatMap(pkgsOf)]);
+          const known = new Set([...BUILTIN.flatMap(pkgsOf), ...lib.items.map(it => getApp(it.id)).filter(Boolean).flatMap(pkgsOf)]);
           const others = installed.filter(x => !known.has(x.package));
           entries.push({ header: true, label: others.length ? 'Installées sur cette TV' : 'Toutes les applis de la TV sont déjà sur l’accueil ou dans la liste ci-dessous.' });
-          others.forEach(x => {
-            const a = installedAsApp(x);
-            entries.push({ label: `${mini(a)}<span>${esc(a.name)}</span>`, value: 'Installée',
-              ok: () => { target = 'inst:' + x.package; go('addRow', 0); } });
-          });
+          others.forEach(x => entries.push({ label: `${mini(installedAsApp(x))}<span>${esc(x.name)}</span>`, value: 'Installée',
+            ok: () => { target = 'inst:' + x.package; go('addRow', 0); } }));
         }
         entries.push({ header: true, label: available.length ? 'Applis populaires' : 'Toutes les applis de la liste sont déjà sur l’accueil.' });
         available.forEach(a => entries.push({ label: `${mini(a)}<span>${esc(a.name)}</span>`,
@@ -677,7 +1044,7 @@
           let id = target;
           if (inst) { // appli de la TV : on la mémorise avec son nom et sa couleur
             id = 'inst-' + inst.package;
-            if (!lib.custom.some(c => c.id === id)) lib.custom.push({ id, installed: true, name: inst.name, package: inst.package, color: inst.color || '#2A3550', kind: 'video' });
+            if (!lib.custom.some(x => x.id === id)) lib.custom.push({ id, installed: true, name: inst.name, package: inst.package, color: inst.color || '#2A3550', kind: 'video' });
           }
           addApp(id, row); goBack();
         };
@@ -685,12 +1052,14 @@
           entries: ROW_DEFS.map(d => ({ label: d.title, value: d.key === suggested ? 'Suggérée' : '', ok: () => confirm(d.key) })) };
       }
       case 'custom': return {
-        title: 'Appli personnalisée', preview: true,
+        title: 'Appli personnalisée',
+        preview: () => { const a = draftApp(); return `<div class="cust-preview" style="--tc2:${a.colors[1]};--tc3:${a.colors[2]}">${logoHTML(a)}</div>`; },
+        onInput: () => { const a = draftApp(); $('settingsPreview').innerHTML = `<div class="cust-preview" style="--tc2:${a.colors[1]};--tc3:${a.colors[2]}">${logoHTML(a)}</div>`; },
         hint: 'OK pour écrire, Haut et Bas pour changer de champ, Retour pour annuler.',
         entries: [
-          { field: 'name', label: 'Nom', ok: () => focusField('name') },
-          { field: 'link', label: 'Lien ou paquet Android', ok: () => focusField('link') },
-          { label: 'Couleur de fond', value: `<span class="swatches">${SWATCHES.map(c => `<i class="sw${c === draft.color ? ' on' : ''}" style="background:${c}"></i>`).join('')}</span>`,
+          { field: 'name', store: draft, label: 'Nom', ok: () => focusField('name') },
+          { field: 'link', store: draft, label: 'Lien ou paquet Android', note: linkNote, ok: () => focusField('link') },
+          { label: 'Couleur de fond', value: `<span class="swatches">${SWATCHES.map(col => `<i class="sw${col === draft.color ? ' on' : ''}" style="background:${col}"></i>`).join('')}</span>`,
             ok: () => { draft.color = cycle(SWATCHES, draft.color, 1); }, right: () => { draft.color = cycle(SWATCHES, draft.color, 1); }, left: () => { draft.color = cycle(SWATCHES, draft.color, -1); } },
           { label: 'Rangée', value: `‹ ${rowTitle(draft.row)} ›`,
             ok: () => { draft.row = cycle(ROW_KEYS, draft.row, 1); }, right: () => { draft.row = cycle(ROW_KEYS, draft.row, 1); }, left: () => { draft.row = cycle(ROW_KEYS, draft.row, -1); } },
@@ -698,50 +1067,51 @@
         ]
       };
     }
+    return { title: '', hint: '', entries: [] };
   }
-  function mainStep(m, d) {
-    if (m.toggle) { prefs[m.toggle] = !prefs[m.toggle]; m.after && m.after(); }
-    else m.step(d);
-    savePrefs();
-  }
+
+  const selectable = (def) => def.entries.filter(e => !e.header);
+  const currentEntry = () => selectable(pageDef())[nav.idx];
   function focusField(f) {
-    const inp = $('cust-' + f); if (!inp) return;
+    const inp = $('fld-' + f); if (!inp) return;
     inp.focus(); const n = inp.value.length; try { inp.setSelectionRange(n, n); } catch { /* ignoré */ }
     if (hasBridge() && typeof window.AndroidTV.showKeyboard === 'function') window.AndroidTV.showKeyboard();
-  }
-  function updatePreview() {
-    const pv = $('settingsPreview');
-    const a = draftApp();
-    pv.style.setProperty('--tc2', a.colors[1]); pv.style.setProperty('--tc3', a.colors[2]);
-    pv.innerHTML = logoHTML(a);
-    const note = $('cust-note'); if (note) note.textContent = linkNote();
   }
 
   function renderSettings() {
     const def = pageDef();
-    const sel = def.entries.filter(e => !e.header);
+    const sel = selectable(def);
     nav.idx = Math.max(0, Math.min(sel.length - 1, nav.idx));
-    if (grabId) nav.idx = Math.max(0, sel.findIndex(e => e.id === grabId));
+    if (grab) nav.idx = Math.max(0, sel.findIndex(e => e.id === grab.id));
+    const inContent = pane === 'content';
+    $('setMenu').innerHTML = CATS.map((ct, i) => `<li class="set-cat${i === catIdx ? (inContent ? ' current' : ' focused') : ''}" data-c="${i}">${ct.icon}<span>${ct.label}</span></li>`).join('');
+    $('settings').classList.toggle('in-menu', !inContent);
     $('settingsTitle').textContent = def.title;
-    $('settingsHint').textContent = def.hint;
-    $('settingsPreview').hidden = !def.preview;
+    $('settingsHint').textContent = inContent ? def.hint : 'Haut et Bas pour choisir une rubrique, Droite ou OK pour entrer, Retour pour fermer.';
+    const pv = def.preview ? def.preview(sel[nav.idx]) : '';
+    $('settingsPreview').hidden = !pv;
+    if (pv) $('settingsPreview').innerHTML = pv;
     let k = -1;
     $('settingsList').innerHTML = def.entries.map(e => {
       if (e.header) return `<li class="setting-group">${e.label}</li>`;
       k++;
-      const cls = ['setting', e.cls || '', k === nav.idx && !e.cls?.includes('grab') ? 'focused' : '', e.field ? 'field' : ''].join(' ');
+      const cls = ['setting', e.cls || '', inContent && k === nav.idx && !(e.cls || '').includes('grab') ? 'focused' : '', e.field ? 'field' : ''].join(' ');
       if (e.field) {
-        const extra = e.field === 'link' ? `<span class="field-note" id="cust-note"></span>` : '';
+        const note = e.note ? `<span class="field-note" id="fld-note-${e.field}">${esc(e.note())}</span>` : '';
         return `<li class="${cls}" data-i="${k}"><span class="field-label">${e.label}</span>
-          <input id="cust-${e.field}" type="${e.field === 'link' ? 'url' : 'text'}" maxlength="${e.field === 'name' ? 30 : 300}"
-            value="${esc(draft[e.field])}" autocomplete="off" autocapitalize="${e.field === 'name' ? 'words' : 'off'}" spellcheck="false">${extra}</li>`;
+          <input id="fld-${e.field}" type="${e.field === 'link' ? 'url' : 'text'}" maxlength="${e.field === 'name' ? 30 : 300}"
+            value="${esc(e.store[e.field])}" placeholder="${esc(e.placeholder || '')}" autocomplete="off"
+            autocapitalize="${e.field === 'name' ? 'words' : 'off'}" spellcheck="false">${note}</li>`;
       }
       return `<li class="${cls}" data-i="${k}"><span class="row-left">${e.label}</span><span class="val">${e.value ?? ''}</span></li>`;
     }).join('');
-    if (def.preview) {
-      updatePreview();
-      ['name', 'link'].forEach(f => $('cust-' + f).addEventListener('input', (ev) => { draft[f] = ev.target.value; updatePreview(); }));
-    }
+    def.entries.filter(e => e.field).forEach(e => {
+      $('fld-' + e.field).addEventListener('input', (ev) => {
+        e.store[e.field] = ev.target.value;
+        if (e.note) $('fld-note-' + e.field).textContent = e.note();
+        def.onInput && def.onInput();
+      });
+    });
     // garde la ligne sélectionnée visible dans la liste
     const ul = $('settingsList'), li = ul.querySelector('.focused, .grab');
     if (li) {
@@ -751,41 +1121,144 @@
   }
 
   function settingsKey(k) {
-    const sel = pageDef().entries.filter(e => !e.header);
-    if (grabId) { // déplacement d'une appli dans « Mes applis »
-      if (k === 'up' || k === 'down') moveGrabbed(k === 'up' ? -1 : 1);
-      else { grabId = null; sound('select'); }
+    if (pane === 'menu') {
+      if (k === 'up' || k === 'down') {
+        const n = Math.max(0, Math.min(CATS.length - 1, catIdx + (k === 'up' ? -1 : 1)));
+        sound(n === catIdx ? 'edge' : 'move');
+        if (n !== catIdx) enterCat(n);
+        return renderSettings();
+      }
+      if (k === 'right' || k === 'ok') {
+        if (!selectable(pageDef()).length) return sound('edge');
+        pane = 'content'; sound('select'); return renderSettings();
+      }
+      if (k === 'back' || k === 'left') return closeSettings();
+      return;
+    }
+    const def = pageDef();
+    const sel = selectable(def);
+    if (grab) { // déplacement d'une appli ou d'une rangée
+      if (k === 'up' || k === 'down') grab.move(k === 'up' ? -1 : 1);
+      else { grab = null; sound('select'); }
       return renderSettings();
     }
-    if (k === 'back') { if (nav.page === 'custom') document.activeElement.blur?.(); return goBack(); }
+    if (k === 'back') return goBack();
     if (k === 'up' || k === 'down') {
       const n = Math.max(0, Math.min(sel.length - 1, nav.idx + (k === 'up' ? -1 : 1)));
       sound(n === nav.idx ? 'edge' : 'move'); nav.idx = n; confirmRemove = false;
+      def.onMove && def.onMove(sel[n]);
       return renderSettings();
     }
-    const e = sel[nav.idx]; if (!e) return;
-    const fn = e[k];
-    if (!fn) return sound('edge');
+    const e = sel[nav.idx];
+    const fn = e && e[k];
+    if (!fn) { if (k === 'left') return goBack(); return sound('edge'); } // Gauche sans valeur à changer : retour
     sound(k === 'ok' ? 'select' : 'move');
     const page = nav.page;
     fn();
-    if (nav.page === page && document.activeElement?.tagName !== 'INPUT') renderSettings();
+    if (layer === 'settings' && nav.page === page && document.activeElement?.tagName !== 'INPUT') renderSettings();
   }
   function openSettings() {
-    sound('select'); stack.length = 0; Object.assign(nav, { page: 'main', idx: 0 }); grabId = null;
-    $('settingsList').scrollTop = 0; renderSettings();
+    sound('select'); pane = 'menu'; enterCat(0);
+    renderSettings();
     openLayer('settings', 'settings');
   }
   function closeSettings() {
+    const def = pageDef(); def.onLeave && def.onLeave();
     document.activeElement?.blur?.();
     $('settings').classList.remove('open'); $('settings').setAttribute('aria-hidden', 'true');
-    layer = 'home'; sound('back');
+    layer = 'home'; sound('back'); grab = null;
     r = Math.min(r, NAV.length - 1);
+    if (r === 0) c = NAV[0].items.indexOf($('settingsBtn'));
     focus(r, Math.min(c, NAV[r].items.length - 1), false);
     restartRotation();
   }
-  function applyMotion() { document.documentElement.classList.toggle('reduce-motion', prefs.reduceMotion); }
-  applyMotion();
+
+  /* ---------- Fonds d'écran photo ---------- */
+  // Photos libres de droits (Unsplash), compressées et incluses dans l'appli : elles restent disponibles hors ligne.
+  const WALL_CATS = [
+    { key: 'nature', label: 'Nature' }, { key: 'animaux', label: 'Animaux' }, { key: 'ocean', label: 'Océan' },
+    { key: 'ciel', label: 'Ciel et espace' }, { key: 'ville', label: 'Villes la nuit' }
+  ];
+  const WALL_CHOICES = [{ key: 'none', label: 'Aucun (dégradé du thème)' }, ...WALL_CATS, { key: 'random', label: 'Aléatoire' }];
+  const WALL_EVERY = [5, 15, 30, 0];
+  const WALL_COUNT = 8;
+  const wallLabel = (k) => (WALL_CHOICES.find(w => w.key === k) || WALL_CHOICES[0]).label.replace(' (dégradé du thème)', '');
+  const wallPath = (cat, n, mini) => `wallpapers/${cat}/${String(n).padStart(2, '0')}${mini ? '-mini' : ''}.jpg`;
+  function wallPool(cat) {
+    if (!cat || cat === 'none') return [];
+    const cats = cat === 'random' ? WALL_CATS.map(c => c.key) : [cat];
+    return cats.flatMap(k => Array.from({ length: WALL_COUNT }, (_, i) => wallPath(k, i + 1)));
+  }
+  let wallLayer = 0, wallTimer = 0, wallCurrent = load('tv.wallCurrent', null);
+  function showWallpaper(src) {
+    const layers = [$('wall0'), $('wall1')];
+    const img = new Image();
+    img.onload = () => { // fondu doux une fois la photo prête
+      const next = layers[1 - wallLayer];
+      next.style.backgroundImage = `url("${src}")`;
+      next.classList.add('show'); layers[wallLayer].classList.remove('show');
+      wallLayer = 1 - wallLayer;
+    };
+    img.src = src;
+    wallCurrent = src; save('tv.wallCurrent', src);
+  }
+  function nextWallpaper() {
+    const pool = wallPool(prefs.wallCat);
+    if (!pool.length) return;
+    let src = pool[Math.floor(Math.random() * pool.length)];
+    if (pool.length > 1 && src === wallCurrent) src = pool[(pool.indexOf(src) + 1) % pool.length];
+    showWallpaper(src);
+  }
+  function applyWallpaper() {
+    clearInterval(wallTimer);
+    const on = prefs.wallCat !== 'none';
+    $('ambient').classList.toggle('has-wall', on);
+    if (!on) { $('wall0').classList.remove('show'); $('wall1').classList.remove('show'); return; }
+    const pool = wallPool(prefs.wallCat);
+    if (wallCurrent && pool.includes(wallCurrent)) showWallpaper(wallCurrent); else nextWallpaper();
+    if (prefs.wallEvery > 0) wallTimer = setInterval(() => { if (!document.hidden && !saverOn) nextWallpaper(); }, prefs.wallEvery * 60000);
+  }
+
+  /* ---------- Réseau : Wi-Fi, câble, hors ligne ---------- */
+  let net = { online: true, connected: true, internet: true, type: 'wifi', level: 4, ssid: null, fromApp: false };
+  const SIGNAL = ['', 'Faible', 'Moyen', 'Bon', 'Excellent'];
+  function wifiSVG(level, off) {
+    const op = (i) => (!off && level >= i ? 1 : 0.28);
+    return `<svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" aria-hidden="true">
+      <path d="M2.5 9.2a14 14 0 0 1 19 0" stroke="currentColor" stroke-width="2.2" opacity="${op(4)}"/>
+      <path d="M5.6 12.5a9.4 9.4 0 0 1 12.8 0" stroke="currentColor" stroke-width="2.2" opacity="${op(3)}"/>
+      <path d="M8.7 15.7a4.9 4.9 0 0 1 6.6 0" stroke="currentColor" stroke-width="2.2" opacity="${op(2)}"/>
+      <circle cx="12" cy="19.2" r="1.7" fill="currentColor" opacity="${op(1)}"/>
+      ${off ? '<path d="M4 3.5l16 17" stroke="#FF4D4F" stroke-width="2.6"/>' : ''}</svg>`;
+  }
+  const ETH_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true">
+    <rect x="4" y="5" width="16" height="11" rx="2"/><path d="M8 16v3h8v-3M9 9h1M12 9h1M15 9h1"/></svg>`;
+  function readNetwork() {
+    const before = net.online;
+    if (hasBridge() && typeof window.AndroidTV.networkInfo === 'function') {
+      try {
+        const n = JSON.parse(window.AndroidTV.networkInfo());
+        net = { connected: !!n.connected, internet: n.internet !== false, type: n.type || 'none',
+          level: n.level || 0, ssid: n.ssid || null, fromApp: true };
+        net.online = net.connected && net.internet;
+      } catch { /* on garde l'état précédent */ }
+    } else {
+      // navigateur : seule la présence d'Internet est connue (pas la force du signal)
+      const on = navigator.onLine !== false;
+      const t = navigator.connection && navigator.connection.type;
+      net = { online: on, connected: on, internet: on, type: on ? (t === 'ethernet' ? 'ethernet' : 'wifi') : 'none', level: on ? 4 : 0, ssid: null, fromApp: false };
+    }
+    renderNetwork();
+    if (net.online && !before) updateWeather(); // la connexion revient : météo à jour
+  }
+  function renderNetwork() {
+    const btn = $('netBtn');
+    btn.innerHTML = !net.online ? wifiSVG(0, true) : net.type === 'ethernet' ? ETH_SVG : wifiSVG(net.level || 4);
+    btn.classList.toggle('offline', !net.online);
+    btn.setAttribute('aria-label', !net.online ? 'Pas de connexion Internet' : net.type === 'ethernet' ? 'Connecté par câble' : `Wi-Fi, signal ${SIGNAL[net.level] || ''}`.trim());
+    $('netMsg').classList.toggle('show', !net.online);
+    if (layer === 'network') renderNetPanel();
+  }
 
   /* ---------- Mode veille ---------- */
   let saverOn = false, idleTimer = 0, sceneTimer = 0, sceneIdx = 0, scenesBuilt = false;
@@ -855,21 +1328,39 @@
     });
     return `<svg viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg"><defs>${defs}</defs>${body}</svg>`;
   }
+  // Écran de veille : photos (mêmes catégories que le fond d'écran), paysages dessinés ou fond noir
+  let scenesFor = '';
   function buildScenes() {
-    if (scenesBuilt) return;
-    $('saverScenes').innerHTML = SCENES.map(s => `<div class="scene"><div class="scene-inner">${sceneSVG(s)}</div></div>`).join('');
-    scenesBuilt = true;
+    const style = prefs.saverStyle || 'photos';
+    const key = style + ':' + prefs.wallCat;
+    if (scenesFor === key) return;
+    if (style === 'photos') {
+      const pool = wallPool(prefs.wallCat === 'none' ? 'random' : prefs.wallCat).sort(() => Math.random() - 0.5).slice(0, 16);
+      $('saverScenes').innerHTML = pool.map(src => `<div class="scene"><div class="scene-inner scene-photo" data-src="${src}"></div></div>`).join('');
+    } else if (style === 'noir') {
+      $('saverScenes').innerHTML = '<div class="scene noir"></div>';
+    } else {
+      $('saverScenes').innerHTML = SCENES.map(s => `<div class="scene"><div class="scene-inner">${sceneSVG(s)}</div></div>`).join('');
+    }
+    scenesFor = key;
   }
   function showScene(i) {
-    const list = $('saverScenes').children;
+    const list = [...$('saverScenes').children];
+    if (!list.length) return;
     sceneIdx = (i + list.length) % list.length;
-    [...list].forEach((s, k) => s.classList.toggle('show', k === sceneIdx));
+    // photos chargées une par une (la suivante est préparée à l'avance)
+    [sceneIdx, (sceneIdx + 1) % list.length].forEach(k => {
+      const inner = list[k].querySelector('[data-src]');
+      if (inner && !inner.style.backgroundImage) inner.style.backgroundImage = `url("${inner.dataset.src}")`;
+    });
+    list.forEach((s, k) => s.classList.toggle('show', k === sceneIdx));
   }
   function startSaver() {
     if (saverOn || splashOn) return;
     saverOn = true; buildScenes(); tick(); renderWeather();
-    showScene(Math.floor(Math.random() * SCENES.length));
-    clearInterval(sceneTimer); sceneTimer = setInterval(() => showScene(sceneIdx + 1), 45000);
+    showScene(Math.floor(Math.random() * $('saverScenes').children.length));
+    clearInterval(sceneTimer);
+    if ($('saverScenes').children.length > 1) sceneTimer = setInterval(() => showScene(sceneIdx + 1), 45000);
     $('saver').classList.add('on'); $('saver').setAttribute('aria-hidden', 'false');
     clearTimeout(rotTimer); renderDots();
   }
@@ -914,10 +1405,12 @@
     if (splashOn || saverOn) { e.preventDefault(); return wake(); } // n'importe quelle touche
     resetIdle();
     if (document.activeElement?.tagName === 'INPUT') { // saisie : on laisse le texte s'écrire
-      const nav2 = { ArrowUp: 'up', ArrowDown: 'down', Enter: 'down', Escape: 'stay', GoBack: 'stay' }[e.key] || (e.keyCode === 4 ? 'stay' : null);
-      if (!nav2) return;
+      const act = { ArrowUp: 'up', ArrowDown: 'down', Enter: 'enter', Escape: 'stay', GoBack: 'stay' }[e.key] || (e.keyCode === 4 ? 'stay' : null);
+      if (!act) return;
       e.preventDefault(); document.activeElement.blur();
-      return nav2 === 'stay' ? renderSettings() : settingsKey(nav2);
+      if (act === 'stay') return renderSettings();
+      if (act === 'enter') { const ce = currentEntry(); if (ce && ce.onEnter) { ce.onEnter(); return; } return settingsKey('down'); }
+      return settingsKey(act);
     }
     if (!k) return;
     e.preventDefault();
@@ -928,31 +1421,46 @@
   });
   function wake() { if (splashOn) endSplash(); else if (saverOn) stopSaver(); }
   // Utilisé par le lanceur Android (touches Retour / OK transmises par l'appli)
-  window.tvHandleKey = (k) => { if (splashOn || saverOn) return wake(); resetIdle(); handle(k); };
+  window.tvHandleKey = (k) => {
+    if (splashOn || saverOn) return wake();
+    resetIdle();
+    if (document.activeElement?.tagName === 'INPUT') { document.activeElement.blur(); return renderSettings(); }
+    handle(k);
+  };
 
   function handle(k) {
     if (layer === 'details') { if (k === 'back' || k === 'ok') closeLayer('details'); return; }
     if (layer === 'weather') { if (k === 'back' || k === 'ok') closeLayer('weatherPanel'); return; }
+    if (layer === 'network') return networkKey(k);
     if (layer === 'settings') return settingsKey(k);
     if (k === 'ok') return activate(focusedEl);
-    if (k === 'back') { if (r !== 1 || c !== 0) { sound('back'); focus(1, 0, false); } return; }
+    if (k === 'back') { const h = homeRow(); if (r !== h || c !== 0) { sound('back'); focus(h, 0, false); } return; }
     move(k);
   }
 
   /* ---------- Souris / tactile (en bonus) ---------- */
   function posOf(it) { for (let i = 0; i < NAV.length; i++) { const j = NAV[i].items.indexOf(it); if (j >= 0) return [i, j]; } return null; }
   function bindPointer(it) {
+    if (it._bound) return; it._bound = true;
     it.tabIndex = -1;
     it.addEventListener('mouseenter', () => { const p = posOf(it); if (p && layer === 'home') focus(p[0], p[1], false); });
     it.addEventListener('click', (e) => { e.preventDefault(); const p = posOf(it); if (p) { focus(p[0], p[1], false); activate(it); } });
   }
-  ['weather', 'settingsBtn', 'heroPlay', 'heroMore'].forEach(id => bindPointer($(id)));
+  ['netBtn', 'weather', 'settingsBtn', 'heroPlay', 'heroMore'].forEach(id => bindPointer($(id)));
+  $('setMenu').addEventListener('click', (e) => {
+    const li = e.target.closest('.set-cat'); if (!li) return;
+    enterCat(+li.dataset.c); pane = 'content'; renderSettings();
+  });
   $('settingsList').addEventListener('click', (e) => {
     const li = e.target.closest('.setting'); if (!li || e.target.tagName === 'INPUT') return;
-    nav.idx = +li.dataset.i; settingsKey('ok');
+    pane = 'content'; nav.idx = +li.dataset.i; settingsKey('ok');
   });
   $('settingsList').addEventListener('focusin', (e) => { // clic direct dans un champ
-    const li = e.target.closest('.setting'); if (li && nav.idx !== +li.dataset.i) { nav.idx = +li.dataset.i; [...$('settingsList').children].forEach(x => x.classList.toggle('focused', x === li)); }
+    const li = e.target.closest('.setting'); if (li && nav.idx !== +li.dataset.i) { pane = 'content'; nav.idx = +li.dataset.i; [...$('settingsList').children].forEach(x => x.classList.toggle('focused', x === li)); }
+  });
+  $('netCard').addEventListener('click', (e) => {
+    const li = e.target.closest('.setting'); if (!li) return;
+    netIdx = +li.dataset.i; networkKey('ok');
   });
   $('details').addEventListener('click', () => closeLayer('details'));
   $('weatherPanel').addEventListener('click', () => closeLayer('weatherPanel'));
@@ -971,15 +1479,16 @@
     if (layer === 'settings') closeSettings();
     else if (layer === 'details') closeLayer('details');
     else if (layer === 'weather') closeLayer('weatherPanel');
-    focus(1, 0, false);
+    else if (layer === 'network') closeLayer('netPanel');
+    focus(homeRow(), 0, false);
   };
-  // Retour dans le lanceur : la liste des applis installées a pu changer
+  // Retour dans le lanceur : rangées mises à jour sans perdre la sélection
   function rebuildKeepFocus() {
     recentsDirty = false;
     const title = NAV[r] && NAV[r].title, id = focusedEl && focusedEl._item && focusedEl._item.id;
     buildRows();
     let nr = Math.min(r, NAV.length - 1), nc = c;
-    if (r >= 2) {
+    if (r >= FIRST()) {
       const i = NAV.findIndex(rw => rw.title === title);
       if (i >= 0) { nr = i; const j = NAV[i].items.findIndex(t => t._item && t._item.id === id); nc = j >= 0 ? j : c; }
     }
@@ -990,19 +1499,28 @@
     const changed = refreshInstalled();
     if (layer === 'settings' && changed) renderSettings();
     if (changed || recentsDirty) rebuildKeepFocus();
+    readNetwork();
+    if (upd.state === 'installing' || upd.state === 'needperm') { upd.state = upd.remote ? 'available' : 'idle'; if (layer === 'settings') renderSettings(); }
   };
   window.tvToast = (msg) => toast(msg);
+  // Changement de réseau signalé par l'appli Android, ou par le navigateur
+  window.tvNetworkChanged = () => readNetwork();
+  addEventListener('online', readNetwork);
+  addEventListener('offline', readNetwork);
+  setInterval(readNetwork, 8000);
 
   // Retour depuis une appli ouverte : on reprend la bannière et la veille
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) { clearTimeout(rotTimer); clearTimeout(idleTimer); }
-    else { resetIdle(); restartRotation(); if (recentsDirty) rebuildKeepFocus(); }
+    else { resetIdle(); restartRotation(); readNetwork(); if (recentsDirty) rebuildKeepFocus(); }
   });
 
   /* ---------- Démarrage ---------- */
   buildRows();
   showSlide(0, false);
-  focus(1, 0, false);
+  focus(homeRow(), 0, false);
+  applyWallpaper();
+  readNetwork();
   updateWeather(); setInterval(updateWeather, 15 * 60 * 1000);
   startSplash();
 })();

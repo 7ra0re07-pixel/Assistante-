@@ -11,7 +11,8 @@
 </head>
 <body>
   <!-- Lumière ambiante : prend les couleurs de l'élément sélectionné -->
-  <div class="ambient" aria-hidden="true">
+  <div class="ambient" id="ambient" aria-hidden="true">
+    <div class="wall" id="wall0"></div><div class="wall" id="wall1"></div>
     <div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div>
     <div class="ambient-veil"></div>
   </div>
@@ -23,6 +24,8 @@
         <span class="date" id="date"></span>
       </div>
       <div class="topbar-right">
+        <span class="net-msg" id="netMsg" role="status">Pas de connexion Internet</span>
+        <button class="icon-btn net-btn focusable" id="netBtn" aria-label="Réseau"></button>
         <button class="weather focusable" id="weather" aria-label="Météo détaillée">
           <span class="weather-icon" id="weatherIcon"></span>
           <span class="weather-temp" id="weatherTemp">--°</span>
@@ -54,19 +57,30 @@
 
       <div id="rows"></div>
     </main>
-  </div>
 
-  <!-- Panneau paramètres -->
-  <aside class="settings" id="settings" aria-hidden="true">
-    <h2 id="settingsTitle">Paramètres</h2>
-    <div class="cust-preview" id="settingsPreview" hidden></div>
-    <ul id="settingsList"></ul>
-    <p class="settings-hint" id="settingsHint"></p>
-  </aside>
+    <!-- Paramètres : menu des rubriques à gauche, réglages à droite -->
+    <div class="settings" id="settings" aria-hidden="true">
+      <nav class="set-menu">
+        <h2 class="set-brand">Paramètres</h2>
+        <ul id="setMenu"></ul>
+      </nav>
+      <section class="set-content">
+        <h3 id="settingsTitle"></h3>
+        <div class="set-preview" id="settingsPreview" hidden></div>
+        <ul id="settingsList"></ul>
+        <p class="settings-hint" id="settingsHint"></p>
+      </section>
+    </div>
+  </div>
 
   <!-- Météo détaillée -->
   <div class="details" id="weatherPanel" aria-hidden="true">
     <div class="details-card weather-card" id="weatherCard"></div>
+  </div>
+
+  <!-- Réseau -->
+  <div class="details" id="netPanel" aria-hidden="true">
+    <div class="details-card net-card" id="netCard"></div>
   </div>
 
   <!-- Mode veille -->

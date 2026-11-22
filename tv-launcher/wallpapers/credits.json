@@ -1,0 +1,212 @@
+{
+ "nature": [
+  {
+   "file": "wallpapers/nature/01.jpg",
+   "author": "Jeff Sheldon",
+   "source": "https://unsplash.com/photos/SdSc4sWVMRU"
+  },
+  {
+   "file": "wallpapers/nature/02.jpg",
+   "author": "Alberto Restifo",
+   "source": "https://unsplash.com/photos/Ni4NgA64TFQ"
+  },
+  {
+   "file": "wallpapers/nature/03.jpg",
+   "author": "Alexey Topolyanskiy",
+   "source": "https://unsplash.com/photos/-oWyJoSqBRM"
+  },
+  {
+   "file": "wallpapers/nature/04.jpg",
+   "author": "Christian Joudrey",
+   "source": "https://unsplash.com/photos/mWRR1xj95hg"
+  },
+  {
+   "file": "wallpapers/nature/05.jpg",
+   "author": "Larry Chen",
+   "source": "https://unsplash.com/photos/Nte-4RiRfwU"
+  },
+  {
+   "file": "wallpapers/nature/06.jpg",
+   "author": "Andrew Coelho",
+   "source": "https://unsplash.com/photos/VB-w_3dnyvI"
+  },
+  {
+   "file": "wallpapers/nature/07.jpg",
+   "author": "Ales Krivec",
+   "source": "https://unsplash.com/photos/OmelL9tVVno"
+  },
+  {
+   "file": "wallpapers/nature/08.jpg",
+   "author": "Tanvi Malik",
+   "source": "https://unsplash.com/photos/OeC1wIsKNpk"
+  }
+ ],
+ "animaux": [
+  {
+   "file": "wallpapers/animaux/01.jpg",
+   "author": "Thomas Lefebvre",
+   "source": "https://unsplash.com/photos/aRXPJnXQ9lU"
+  },
+  {
+   "file": "wallpapers/animaux/02.jpg",
+   "author": "Paula Borowska",
+   "source": "https://unsplash.com/photos/OM7CvKnhjfs"
+  },
+  {
+   "file": "wallpapers/animaux/03.jpg",
+   "author": "Josh Felise",
+   "source": "https://unsplash.com/photos/mblYxasm0nk"
+  },
+  {
+   "file": "wallpapers/animaux/04.jpg",
+   "author": "Levi Saunders",
+   "source": "https://unsplash.com/photos/NUMlxTPsznM"
+  },
+  {
+   "file": "wallpapers/animaux/05.jpg",
+   "author": "Niko Virtanen",
+   "source": "https://nikovirtanen.com"
+  },
+  {
+   "file": "wallpapers/animaux/06.jpg",
+   "author": "Paul Earle",
+   "source": "https://unsplash.com/photos/l98YXp1X8dA"
+  },
+  {
+   "file": "wallpapers/animaux/07.jpg",
+   "author": "Samuel Scrimshaw",
+   "source": "https://unsplash.com/photos/sseiVD2XsOk"
+  },
+  {
+   "file": "wallpapers/animaux/08.jpg",
+   "author": "Elias Carlsson",
+   "source": "https://unsplash.com/photos/wSb8d-ke5-4"
+  }
+ ],
+ "ocean": [
+  {
+   "file": "wallpapers/ocean/01.jpg",
+   "author": "Paulo Simões Mendes",
+   "source": "https://unsplash.com/photos/hrcRtexM7M0"
+  },
+  {
+   "file": "wallpapers/ocean/02.jpg",
+   "author": "Stefan Kunze",
+   "source": "https://unsplash.com/photos/1-C334jLxG0"
+  },
+  {
+   "file": "wallpapers/ocean/03.jpg",
+   "author": "Tim Marshall",
+   "source": "https://unsplash.com/photos/yEOCA6oiVqg"
+  },
+  {
+   "file": "wallpapers/ocean/04.jpg",
+   "author": "Rob Bye",
+   "source": "https://unsplash.com/photos/OlZ1nWLEEgM"
+  },
+  {
+   "file": "wallpapers/ocean/05.jpg",
+   "author": "Tiago Aguiar",
+   "source": "https://unsplash.com/photos/uXzNVOZT5no"
+  },
+  {
+   "file": "wallpapers/ocean/06.jpg",
+   "author": "Justin Leibow",
+   "source": "https://unsplash.com/photos/GkKJ56oZ_30"
+  },
+  {
+   "file": "wallpapers/ocean/07.jpg",
+   "author": "Sarah Bürvenich",
+   "source": "https://unsplash.com/photos/vigsqYux_-8"
+  },
+  {
+   "file": "wallpapers/ocean/08.jpg",
+   "author": "Darrell Cassell",
+   "source": "https://unsplash.com/photos/hoCXpPUMCoE"
+  }
+ ],
+ "ciel": [
+  {
+   "file": "wallpapers/ciel/01.jpg",
+   "author": "Juskteez Vu",
+   "source": "https://unsplash.com/photos/TIrXot28Znc"
+  },
+  {
+   "file": "wallpapers/ciel/02.jpg",
+   "author": "Marcelo Quinan",
+   "source": "https://unsplash.com/photos/R3pUGn5YiTg"
+  },
+  {
+   "file": "wallpapers/ciel/03.jpg",
+   "author": "Vashishtha Jogi",
+   "source": "https://unsplash.com/photos/bClr95glx6k"
+  },
+  {
+   "file": "wallpapers/ciel/04.jpg",
+   "author": "ahmadreza sajadi",
+   "source": "https://unsplash.com/photos/55xd_uiUYEE"
+  },
+  {
+   "file": "wallpapers/ciel/05.jpg",
+   "author": "NASA",
+   "source": "https://unsplash.com/photos/NuE8Nu3otjo"
+  },
+  {
+   "file": "wallpapers/ciel/06.jpg",
+   "author": "Cristian Baron",
+   "source": "https://unsplash.com/photos/dPFaq7RVzbQ"
+  },
+  {
+   "file": "wallpapers/ciel/07.jpg",
+   "author": "Liane Metzler",
+   "source": "https://unsplash.com/photos/Y1ByvAGQ5iE"
+  },
+  {
+   "file": "wallpapers/ciel/08.jpg",
+   "author": "Nelly Volkovich",
+   "source": "https://unsplash.com/photos/ZSMgNjYrHRM"
+  }
+ ],
+ "ville": [
+  {
+   "file": "wallpapers/ville/01.jpg",
+   "author": "Dmitry Sytnik",
+   "source": "https://unsplash.com/photos/bW2vHKCxbx4"
+  },
+  {
+   "file": "wallpapers/ville/02.jpg",
+   "author": "Israel Sundseth",
+   "source": "https://unsplash.com/photos/BYu8ITUWMfc"
+  },
+  {
+   "file": "wallpapers/ville/03.jpg",
+   "author": "Yulia Vambold",
+   "source": "https://unsplash.com/photos/s0ifr6qb6H0"
+  },
+  {
+   "file": "wallpapers/ville/04.jpg",
+   "author": "Anders Jildén",
+   "source": "https://unsplash.com/photos/nrLtvA05jk8"
+  },
+  {
+   "file": "wallpapers/ville/05.jpg",
+   "author": "Vadim Sherbakov",
+   "source": "https://unsplash.com/photos/xS_RzdD5CFE"
+  },
+  {
+   "file": "wallpapers/ville/06.jpg",
+   "author": "Vladimir Kudinov",
+   "source": "https://unsplash.com/photos/KBX9XHk266s"
+  },
+  {
+   "file": "wallpapers/ville/07.jpg",
+   "author": "Hide Obara",
+   "source": "https://unsplash.com/photos/2p1HOcpi14U"
+  },
+  {
+   "file": "wallpapers/ville/08.jpg",
+   "author": "Wojtek Witkowski",
+   "source": "https://unsplash.com/photos/h7rOzTmGxWE"
+  }
+ ]
+}

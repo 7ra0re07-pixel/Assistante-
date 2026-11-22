@@ -78,17 +78,29 @@ utiliser : choisissez **Accueil TV**, puis **Toujours**.
   Accueil TV remplace l'accueil d'origine).
 - Le bouton **Home** ramène toujours en haut de l'accueil.
 - Si les bords de l'écran sont coupés (certaines TV rognent l'image), réglez
-  **Paramètres → Taille de l'affichage** sur 95 %, 90 %… jusqu'à ce que
+  **Paramètres → Affichage → Marge de l'écran** sur 5 %, 10 %… jusqu'à ce que
   l'horloge et les tuiles soient entièrement visibles. La ligne **Écran**
   juste en dessous indique la taille et la densité réelles de la TV.
+- L'icône **Wi-Fi** en haut à droite montre la force du signal. Sélectionnez-la
+  pour voir le nom du réseau et ouvrir les réglages réseau de la TV. Android
+  n'affiche le nom du réseau qu'après une autorisation de « localisation » :
+  l'appli la demande seulement si vous choisissez **Afficher le nom du réseau**.
 
 ## Mettre à jour
 
-À chaque modification de l'interface, GitHub compile une nouvelle version
-(quelques minutes). Pour l'installer, refaites l'**étape 3** avec la même
-adresse : Downloader la garde dans son historique. La nouvelle version
-s'installe par-dessus l'ancienne et **vos réglages sont conservés**
-(favoris, applis ajoutées, ville de la météo…).
+**Depuis l'appli (à partir de la version qui contient ce réglage)** :
+**Paramètres → À propos → Rechercher une mise à jour**. Si une nouvelle version
+existe, choisissez **Installer la version…** : l'appli la télécharge puis ouvre
+l'installation d'Android.
+
+- La première fois, Android demande d'autoriser **Accueil TV** à installer des
+  applis : activez l'autorisation, revenez avec Retour, puis choisissez à
+  nouveau **Installer la version…**.
+- Vos réglages sont conservés (favoris, applis ajoutées, thème, ville…).
+
+**Avec Downloader** : refaites l'**étape 3** avec la même adresse
+(Downloader la garde dans son historique). C'est la seule méthode pour passer
+d'une version sans ce réglage à la nouvelle.
 
 ## Revenir à l'accueil d'origine
 

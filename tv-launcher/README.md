@@ -27,3 +27,20 @@ entièrement à la télécommande.
 - Prénom de l'écran de démarrage : `userName` dans `data.js`.
 - Météo : Open-Meteo, sans clé. La ville se choisit dans les paramètres.
 - Appli Android TV (APK) : voir [ANDROID_TV.md](ANDROID_TV.md) et le guide d'installation `INSTALLATION_TV.md`.
+
+## Paramètres (roue en haut à droite)
+
+Menu des rubriques à gauche, réglages à droite. Tout se pilote à la télécommande
+et tous les choix sont enregistrés.
+
+- **Accueil** : rangées affichées et leur ordre, bannière (activée ou non, vitesse), fond d'écran.
+- **Applis** : ajouter, retirer, réordonner, voir les applis installées.
+- **Météo** : ville (par nom ou code postal, Sedan par défaut), °C ou °F, afficher ou masquer.
+- **Affichage** : thème (Nuit bleue, Noir profond, Aurore, Forêt, Coucher de soleil,
+  Clair, Automatique, avec aperçu en direct), fond d'écran photo, taille du texte,
+  mode performance, marge de l'écran.
+- **Veille** : délai, style (photos, paysages dessinés, horloge sur fond noir).
+- **Date et heure**, **Son**, **À propos** (version, recherche de mise à jour).
+
+Fonds d'écran : 40 photos Unsplash (licence libre) dans `wallpapers/`, crédits dans
+`wallpapers/CREDITS.md`. Pour l'essayer : `?veille` (écran de veille), `?nosplash`.

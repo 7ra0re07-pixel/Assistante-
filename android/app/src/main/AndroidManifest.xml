@@ -4,6 +4,17 @@
     <!-- Météo et polices -->
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- Indicateur réseau : état de la connexion et force du Wi-Fi -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <!-- Nom du réseau Wi-Fi : Android l'exige (demandé seulement si vous le souhaitez) -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- « Rechercher une mise à jour » : installer la nouvelle version de l'appli -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <uses-feature android:name="android.hardware.wifi" android:required="false" />
+    <uses-feature android:name="android.hardware.location" android:required="false" />
+
     <!-- TV : pas d'écran tactile, Leanback facultatif (fonctionne aussi sur boîtier ou tablette) -->
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
     <uses-feature android:name="android.software.leanback" android:required="false" />
@@ -59,5 +70,12 @@
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
+
+        <!-- Partage du fichier de mise à jour avec l'installateur d'Android -->
+        <provider
+            android:name=".UpdateProvider"
+            android:authorities="${applicationId}.updates"
+            android:exported="false"
+            android:grantUriPermissions="true" />
     </application>
 </manifest>

@@ -30,7 +30,20 @@ import androidx.webkit.WebViewAssetLoader;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import android.Manifest;
+import android.content.Context;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
+import android.net.wifi.WifiInfo;
+import android.net.wifi.WifiManager;
+
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -51,6 +64,8 @@ public class MainActivity extends Activity {
     private WebView web;
     private WebViewAssetLoader assetLoader;
     private String installedCache = null;
+    private ConnectivityManager.NetworkCallback netCallback = null;
+    private static final int REQ_WIFI_NAME = 42;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -102,6 +117,123 @@ public class MainActivity extends Activity {
         setContentView(web);
         web.requestFocus();
         web.loadUrl(HOME_URL);
+        watchNetwork();
+    }
+
+    /** Prévient l'interface dès que la connexion change (Wi-Fi coupé, câble branché…). */
+    private void watchNetwork() {
+        if (Build.VERSION.SDK_INT < 24) return;
+        try {
+            ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+            netCallback = new ConnectivityManager.NetworkCallback() {
+                @Override public void onAvailable(Network n) { notifyNetwork(); }
+                @Override public void onLost(Network n) { notifyNetwork(); }
+                @Override public void onCapabilitiesChanged(Network n, NetworkCapabilities c) { notifyNetwork(); }
+            };
+            cm.registerDefaultNetworkCallback(netCallback);
+        } catch (Exception ignored) { }
+    }
+
+    private void notifyNetwork() {
+        runOnUiThread(() -> js("window.tvNetworkChanged && tvNetworkChanged()"));
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQ_WIFI_NAME) notifyNetwork();
+    }
+
+    /** État du réseau : connecté, Internet joignable, type, force du Wi-Fi (1 à 4), nom du réseau. */
+    @SuppressWarnings("deprecation")
+    private String networkJson() {
+        JSONObject o = new JSONObject();
+        try {
+            ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+            boolean connected = false, internet = false;
+            String type = "none";
+            if (Build.VERSION.SDK_INT >= 23) {
+                Network n = cm.getActiveNetwork();
+                NetworkCapabilities caps = n != null ? cm.getNetworkCapabilities(n) : null;
+                if (caps != null) {
+                    connected = true;
+                    internet = caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED);
+                    if (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) type = "wifi";
+                    else if (caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)) type = "ethernet";
+                    else if (caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) type = "cellular";
+                    else type = "other";
+                }
+            } else {
+                android.net.NetworkInfo ni = cm.getActiveNetworkInfo();
+                if (ni != null && ni.isConnected()) {
+                    connected = true; internet = true;
+                    type = ni.getType() == ConnectivityManager.TYPE_WIFI ? "wifi"
+                         : ni.getType() == ConnectivityManager.TYPE_ETHERNET ? "ethernet" : "other";
+                }
+            }
+            o.put("connected", connected);
+            o.put("internet", internet);
+            o.put("type", type);
+            if ("wifi".equals(type)) {
+                WifiManager wm = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+                WifiInfo wi = wm != null ? wm.getConnectionInfo() : null;
+                if (wi != null) {
+                    o.put("level", WifiManager.calculateSignalLevel(wi.getRssi(), 4) + 1);
+                    String ssid = wi.getSSID();
+                    if (ssid != null && !ssid.contains("unknown ssid")) o.put("ssid", ssid.replaceAll("^\"|\"$", ""));
+                }
+            }
+        } catch (Exception ignored) { }
+        return o.toString();
+    }
+
+    /** Télécharge l'APK de la nouvelle version puis lance l'installation (progression envoyée à la page). */
+    private void downloadAndInstall(String url) {
+        new Thread(() -> {
+            try {
+                File dir = new File(getCacheDir(), "updates");
+                if (!dir.exists()) dir.mkdirs();
+                File apk = new File(dir, "AccueilTV.apk");
+                HttpURLConnection con = (HttpURLConnection) new URL(url).openConnection();
+                con.setInstanceFollowRedirects(true);
+                con.setConnectTimeout(15000);
+                con.setReadTimeout(30000);
+                int total = con.getContentLength();
+                try (InputStream in = con.getInputStream(); FileOutputStream out = new FileOutputStream(apk)) {
+                    byte[] buf = new byte[64 * 1024];
+                    long done = 0; int last = -1, n;
+                    while ((n = in.read(buf)) > 0) {
+                        out.write(buf, 0, n); done += n;
+                        int pct = total > 0 ? (int) (done * 100 / total) : 0;
+                        if (pct != last && pct < 100) { last = pct; final int p = pct; runOnUiThread(() -> js("window.tvUpdateProgress && tvUpdateProgress(" + p + ")")); }
+                    }
+                }
+                runOnUiThread(() -> installApk(apk));
+            } catch (Exception e) {
+                runOnUiThread(() -> js("window.tvUpdateProgress && tvUpdateProgress(-1)"));
+            }
+        }).start();
+    }
+
+    private void installApk(File apk) {
+        if (Build.VERSION.SDK_INT >= 26 && !getPackageManager().canRequestPackageInstalls()) {
+            // Android demande d'autoriser « Accueil TV » à installer des applis
+            js("window.tvUpdateProgress && tvUpdateProgress(-2)");
+            try {
+                startActivity(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + getPackageName()))
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            } catch (Exception ignored) { }
+            return;
+        }
+        try {
+            Uri uri = Build.VERSION.SDK_INT >= 24 ? UpdateProvider.uri(this) : Uri.fromFile(apk);
+            Intent i = new Intent(Intent.ACTION_VIEW).setDataAndType(uri, "application/vnd.android.package-archive")
+                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+            js("window.tvUpdateProgress && tvUpdateProgress(100)");
+            startActivity(i);
+        } catch (Exception e) {
+            js("window.tvUpdateProgress && tvUpdateProgress(-1)");
+        }
     }
 
     private void hideSystemBars() {
@@ -163,6 +295,9 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        if (netCallback != null && Build.VERSION.SDK_INT >= 24) {
+            try { ((ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE)).unregisterNetworkCallback(netCallback); } catch (Exception ignored) { }
+        }
         if (web != null) web.destroy();
         super.onDestroy();
     }
@@ -368,6 +503,50 @@ public class MainActivity extends Activity {
             } catch (Exception e) {
                 return "{}";
             }
+        }
+
+        /** Réseau : {connected, internet, type, level, ssid} */
+        @JavascriptInterface
+        public String networkInfo() {
+            return networkJson();
+        }
+
+        /** Demande l'autorisation de lire le nom du Wi-Fi (Android l'exige pour ce seul renseignement). */
+        @JavascriptInterface
+        public void requestWifiName() {
+            if (Build.VERSION.SDK_INT >= 23) {
+                runOnUiThread(() -> requestPermissions(new String[]{ Manifest.permission.ACCESS_FINE_LOCATION }, REQ_WIFI_NAME));
+            }
+        }
+
+        /** Ouvre les réglages Wi-Fi / réseau de la TV. */
+        @JavascriptInterface
+        public void openNetworkSettings() {
+            runOnUiThread(() -> {
+                String[] actions = { Settings.ACTION_WIFI_SETTINGS, Settings.ACTION_WIRELESS_SETTINGS, Settings.ACTION_SETTINGS };
+                for (String a : actions) {
+                    try { startActivity(new Intent(a).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); return; } catch (Exception ignored) { }
+                }
+            });
+        }
+
+        /** Numéro de version (pour comparer avec la dernière version publiée). */
+        @JavascriptInterface
+        @SuppressWarnings("deprecation")
+        public String versionCode() {
+            try {
+                android.content.pm.PackageInfo pi = getPackageManager().getPackageInfo(getPackageName(), 0);
+                return String.valueOf(Build.VERSION.SDK_INT >= 28 ? pi.getLongVersionCode() : pi.versionCode);
+            } catch (Exception e) {
+                return "0";
+            }
+        }
+
+        /** Télécharge et installe la nouvelle version de l'appli. */
+        @JavascriptInterface
+        public void installUpdate(String url) {
+            if (url == null || !url.startsWith("https://")) return;
+            downloadAndInstall(url);
         }
 
         @JavascriptInterface

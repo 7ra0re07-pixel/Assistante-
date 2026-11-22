@@ -73,6 +73,13 @@ jobs:
       - name: Ajouter l'APK au site
         run: cp apk/AccueilTV.apk tv-launcher/tv.apk
 
+      # Lu par « Rechercher une mise à jour » dans l'appli (même numéro que l'APK)
+      - name: Publier le numéro de version
+        run: |
+          printf '{"versionCode": %s, "versionName": "1.%s", "apk": "https://7ra0re07-pixel.github.io/Assistante-/tv.apk"}\n' \
+            "${{ github.run_number }}" "${{ github.run_number }}" > tv-launcher/version.json
+          cat tv-launcher/version.json
+
       - uses: actions/configure-pages@v5
       # Nom propre à chaque tentative : une relance ne trouve pas deux archives au même nom
       - uses: actions/upload-pages-artifact@v3
