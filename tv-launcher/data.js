@@ -36,7 +36,7 @@ window.TV_DATA = {
     { id: 'twitch', kind: 'video', name: 'Twitch', logo: 'logos/twitch.svg', package: 'tv.twitch.android.app', url: 'https://www.twitch.tv',
       deeplink: { scheme: 'https', path: 'www.twitch.tv/' }, colors: ['#9146FF', '#7B3BE8', '#2B1155'],
       desc: 'Streams en direct, jeux vidéo et discussions.' },
-    { id: 'molotov', kind: 'video', name: 'Molotov', logo: 'logos/molotov.svg', package: 'tv.molotov.app', url: 'https://www.molotov.tv',
+    { id: 'molotov', kind: 'video', name: 'Molotov', logoStyle: 'bold', logoColor: '#FFFFFF', package: 'tv.molotov.app', url: 'https://www.molotov.tv',
       deeplink: { scheme: 'https', path: 'www.molotov.tv/' }, colors: ['#F2F2F2', '#2A2A2A', '#0E0E0E'],
       desc: 'Les chaînes de la TNT en direct et en replay.' },
     { id: 'tf1plus', kind: 'video', name: 'TF1+', logo: 'logos/tf1plus.svg', package: 'fr.tf1.mytf1', url: 'https://www.tf1.fr',
