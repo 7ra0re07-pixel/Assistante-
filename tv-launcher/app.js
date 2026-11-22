@@ -649,6 +649,8 @@
   if (!home || typeof home !== 'object') home = {};
   home.key = typeof home.key === 'string' ? home.key : '';
   home.devices = Array.isArray(home.devices) ? home.devices.filter(d => d && d.id && d.name) : [];
+  // Dernier état connu de chaque appareil (allumé / éteint), gardé sur la TV après un redémarrage
+  home.state = home.state && typeof home.state === 'object' ? home.state : {};
   const saveHome = () => save('tv.home', home);
   const homeReady = () => !!home.key.trim() && home.devices.some(d => d.on || d.off);
 
@@ -701,36 +703,107 @@
     return vmResult(await vmRequest('trigger', { device: routine }), routine);
   }
 
-  // Tuiles de la rangée Maison : « Allumer » et « Éteindre » pour chaque appareil
+  // Tuiles de la rangée Maison : un interrupteur par appareil (OK bascule, appui long = menu)
   const H_ICONS = {
     on: '<svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 21h4" stroke="currentColor" stroke-width="1.8"/><path d="M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.3 1.1 2.2h5c0-.9.4-1.6 1.1-2.2A6 6 0 0 0 12 3z" fill="currentColor"/><path d="M3.2 4.2l1.5 1.4M20.8 4.2l-1.5 1.4M1.5 10.5h2M20.5 10.5h2" stroke="currentColor" stroke-width="1.8"/></svg>',
     off: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.3 1.1 2.2h5c0-.9.4-1.6 1.1-2.2A6 6 0 0 0 12 3z"/></svg>',
     setup: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M12 13v4M10 15h4"/></svg>'
   };
+  const homeBusy = {};
+  const devState = (d) => (home.state[d.id] === 'on' ? 'on' : 'off');
   function homeTile(kind, device) {
     const t = el('button', `tile tile-home ${kind} focusable`);
-    const name = kind === 'setup' ? (home.key.trim() ? 'Ajoute tes appareils dans les paramètres' : 'Configure tes appareils dans les paramètres') : device.name;
-    const act = kind === 'on' ? 'Allumer' : kind === 'off' ? 'Éteindre' : 'Paramètres › Maison';
-    t.innerHTML = `<span class="h-icon">${H_ICONS[kind]}</span><span class="h-name">${esc(name)}</span><span class="h-act">${act}</span>`;
-    t.style.setProperty('--tc1', kind === 'on' ? '#FFC94D' : kind === 'off' ? '#8A94A8' : '#6FA8FF');
-    t.setAttribute('aria-label', kind === 'setup' ? name : `${act} ${device.name}`);
     t._home = { kind, device };
+    if (kind === 'setup') {
+      const name = home.key.trim() ? 'Ajoute tes appareils dans les paramètres' : 'Configure tes appareils dans les paramètres';
+      t.innerHTML = `<span class="h-icon">${H_ICONS.setup}</span><span class="h-name">${esc(name)}</span><span class="h-act">Paramètres › Maison</span>`;
+      t.setAttribute('aria-label', name);
+    } else paintHomeTile(t);
     return t;
+  }
+  function paintHomeTile(t) {
+    const d = t._home.device, on = devState(d) === 'on', busy = !!homeBusy[d.id];
+    t.classList.toggle('is-on', on); t.classList.toggle('is-off', !on); t.classList.toggle('busy', busy);
+    const label = on ? 'Allumée' : 'Éteinte';
+    t.innerHTML = `<span class="h-icon">${on ? H_ICONS.on : H_ICONS.off}</span><span class="h-spin" aria-hidden="true"></span>
+      <span class="h-name">${esc(d.name)}</span><span class="h-act">${busy ? (on ? 'Allumage…' : 'Extinction…') : label}</span>`;
+    t.setAttribute('aria-label', `${d.name} : ${label}. OK pour ${on ? 'éteindre' : 'allumer'}, appui long pour plus de choix`);
   }
   function homeTiles() {
     if (!homeReady()) return [homeTile('setup')];
-    return home.devices.flatMap(d => [...(d.on ? [homeTile('on', d)] : []), ...(d.off ? [homeTile('off', d)] : [])]);
+    return home.devices.filter(d => d.on || d.off).map(d => homeTile('device', d));
   }
-  async function homeAction(tile) {
+  // la rangée peut être reconstruite pendant l'envoi : on retrouve les tuiles par appareil
+  const homeTileEls = (d) => [...document.querySelectorAll('.tile-home.device')].filter(t => t._home && t._home.device.id === d.id);
+  async function setDevice(device, want) {
+    if (homeBusy[device.id]) return;
+    const routine = (want === 'on' ? device.on : device.off) || '';
+    if (!routine.trim()) {
+      sound('edge');
+      return toast(`${device.name} : aucune routine pour ${want === 'on' ? 'allumer' : 'éteindre'}. Ajoute-la dans Paramètres › Maison.`, true);
+    }
+    sound('select');
+    const had = Object.prototype.hasOwnProperty.call(home.state, device.id), prev = home.state[device.id];
+    home.state[device.id] = want; homeBusy[device.id] = true; // affichage immédiat du nouvel état
+    homeTileEls(device).forEach(paintHomeTile);
+    const res = await triggerRoutine(routine);
+    delete homeBusy[device.id];
+    if (!res.ok) { if (had) home.state[device.id] = prev; else delete home.state[device.id]; } // retour à l'état précédent
+    saveHome();
+    homeTileEls(device).forEach(t => {
+      paintHomeTile(t);
+      if (!res.ok) { t.classList.remove('failed'); void t.offsetWidth; t.classList.add('failed'); setTimeout(() => t.classList.remove('failed'), 700); }
+    });
+    if (!res.ok) { sound('edge'); toast(`${device.name} : ${res.msg}`, true); }
+    else if (res.unsure) toast(`${device.name} : commande envoyée (sans confirmation)`);
+  }
+  function homeAction(tile) {
     const { kind, device } = tile._home;
     if (kind === 'setup') return openSettingsAt('maison');
-    if (tile.classList.contains('busy')) return;
-    sound('select');
-    tile.classList.add('busy');
-    const res = await triggerRoutine(kind === 'on' ? device.on : device.off);
-    tile.classList.remove('busy');
-    if (res.ok) toast(`${device.name} : commande « ${kind === 'on' ? 'Allumer' : 'Éteindre'} » ${res.unsure ? 'envoyée' : 'exécutée'}`);
-    else { sound('edge'); toast(`${device.name} : ${res.msg}`, true); }
+    return setDevice(device, devState(device) === 'on' ? 'off' : 'on');
+  }
+
+  // Appui long sur OK : « Allumer » et « Éteindre » séparés (si l'état affiché n'est plus le bon)
+  let hmDevice = null, hmIdx = 0, okHold = null, okSwallow = false;
+  function hmActions() {
+    const d = hmDevice;
+    return [
+      { label: 'Allumer' + (d.on ? '' : ' (aucune routine)'), want: 'on' },
+      { label: 'Éteindre' + (d.off ? '' : ' (aucune routine)'), want: 'off' },
+      { label: 'Annuler' }
+    ];
+  }
+  function openHomeMenu(tile) {
+    if (!tile || !tile._home || tile._home.kind !== 'device' || layer !== 'home') return;
+    hmDevice = tile._home.device;
+    hmIdx = devState(hmDevice) === 'on' ? 1 : 0;
+    sound('select'); renderHomeMenu(); openLayer('homeMenu', 'homeMenu');
+  }
+  function renderHomeMenu() {
+    const on = devState(hmDevice) === 'on', acts = hmActions();
+    $('homeMenuCard').innerHTML = `<h2>${esc(hmDevice.name)}</h2>
+      <div class="net-lines"><div>État affiché : <b>${on ? 'Allumée' : 'Éteinte'}</b></div>
+      <div>Changée à la voix ou depuis une autre appli ? Choisis directement l’action voulue.</div></div>
+      <ul class="net-actions">${acts.map((a, i) => `<li class="setting${i === hmIdx ? ' focused' : ''}" data-i="${i}"><span>${a.label}</span></li>`).join('')}</ul>`;
+  }
+  function closeHomeMenu(silent) {
+    if (!hmDevice) return;
+    hmDevice = null;
+    $('homeMenu').classList.remove('open'); $('homeMenu').setAttribute('aria-hidden', 'true');
+    layer = 'home'; if (!silent) sound('back'); restartRotation();
+  }
+  function homeMenuKey(k) {
+    if (k === 'back') return closeHomeMenu();
+    const acts = hmActions();
+    if (k === 'up' || k === 'down') {
+      const n = Math.max(0, Math.min(acts.length - 1, hmIdx + (k === 'up' ? -1 : 1)));
+      sound(n === hmIdx ? 'edge' : 'move'); hmIdx = n; return renderHomeMenu();
+    }
+    if (k === 'ok') {
+      const d = hmDevice, a = acts[hmIdx];
+      closeHomeMenu(!!a.want);
+      if (a.want) setDevice(d, a.want);
+    }
   }
 
   /* ---------- Fenêtres : détail, météo, réseau ---------- */
@@ -897,6 +970,7 @@
   function removeDevice() {
     if (!confirmRemove) { confirmRemove = true; return; }
     home.devices = home.devices.filter(d => d !== devEdit);
+    delete home.state[devEdit.id];
     homeChanged(); toast(`${devEdit.name} retiré`); goBack();
   }
 
@@ -1782,12 +1856,29 @@
     }
     if (!k) return;
     e.preventDefault();
+    if (okSwallow && k === 'ok') return; // OK encore tenu après l'ouverture du menu
+    // Tuile interrupteur : appui court = basculer, appui long = menu Allumer / Éteindre
+    if (k === 'ok' && layer === 'home' && focusedEl && focusedEl._home && focusedEl._home.kind === 'device') {
+      if (!e.repeat && !okHold) {
+        const tile = focusedEl;
+        okHold = { tile, timer: setTimeout(() => { okHold = null; okSwallow = true; openHomeMenu(tile); }, 650) };
+      }
+      return;
+    }
     const now = performance.now();
     if (e.repeat && now - lastKey < 110) return; // appui long : défilement régulier
     lastKey = now;
     handle(k);
   });
   addEventListener('keyup', (e) => {
+    const isOk = KEY[e.key] === 'ok' || CODE[e.keyCode] === 'ok';
+    if (isOk && okSwallow) { okSwallow = false; e.preventDefault(); return; }
+    if (isOk && okHold) {
+      e.preventDefault(); clearTimeout(okHold.timer);
+      const t = okHold.tile; okHold = null;
+      if (layer === 'home') activate(t);
+      return;
+    }
     if (!pendingField) return;
     if (KEY[e.key] === 'ok' || CODE[e.keyCode] === 'ok') { e.preventDefault(); openPendingField(); }
   });
@@ -1809,6 +1900,7 @@
     if (layer === 'weather') { if (k === 'back' || k === 'ok') closeLayer('weatherPanel'); return; }
     if (layer === 'network') return networkKey(k);
     if (layer === 'phone') { if (k === 'back' || k === 'ok') closePhone(); return; }
+    if (layer === 'homeMenu') return homeMenuKey(k);
     if (layer === 'settings') return settingsKey(k);
     if (k === 'ok') return activate(focusedEl);
     if (k === 'back') { const h = homeRow(); if (r !== h || c !== 0) { sound('back'); focus(h, 0, false); } return; }
@@ -1822,6 +1914,8 @@
     it.tabIndex = -1;
     it.addEventListener('mouseenter', () => { const p = posOf(it); if (p && layer === 'home') focus(p[0], p[1], false); });
     it.addEventListener('click', (e) => { e.preventDefault(); const p = posOf(it); if (p) { focus(p[0], p[1], false); activate(it); } });
+    if (it._home && it._home.kind === 'device') // clic droit ou appui long au doigt : menu Allumer / Éteindre
+      it.addEventListener('contextmenu', (e) => { e.preventDefault(); const p = posOf(it); if (p) { focus(p[0], p[1], false); openHomeMenu(it); } });
   }
   ['netBtn', 'weather', 'settingsBtn', 'heroPlay', 'heroMore'].forEach(id => bindPointer($(id)));
   $('setMenu').addEventListener('click', (e) => {
@@ -1843,6 +1937,12 @@
   });
   $('details').addEventListener('click', () => closeLayer('details'));
   $('phonePanel').addEventListener('click', () => closePhone());
+  $('homeMenuCard').addEventListener('click', (e) => {
+    e.stopPropagation();
+    const li = e.target.closest('.setting'); if (!li) return;
+    hmIdx = +li.dataset.i; homeMenuKey('ok');
+  });
+  $('homeMenu').addEventListener('click', () => closeHomeMenu());
   $('weatherPanel').addEventListener('click', () => closeLayer('weatherPanel'));
   ['mousemove', 'mousedown', 'wheel', 'touchstart'].forEach(ev => addEventListener(ev, () => {
     if (saverOn && ev !== 'mousemove') return stopSaver();
@@ -1857,6 +1957,7 @@
     if (splashOn) endSplash();
     stopTyping();
     if (layer === 'phone') closePhone(true);
+    if (layer === 'homeMenu') closeHomeMenu(true);
     document.activeElement?.blur?.();
     if (layer === 'settings') closeSettings();
     else if (layer === 'details') closeLayer('details');

@@ -48,8 +48,13 @@ Fonds d'écran : 40 photos Unsplash (licence libre) dans `wallpapers/`, crédits
 
 ## Maison : piloter tes appareils avec Voice Monkey
 
-La rangée **Maison** affiche, pour chaque appareil, une tuile **Allumer** et une
-tuile **Éteindre**. Chaque tuile lance une routine Alexa par l'intermédiaire de
+La rangée **Maison** affiche une tuile interrupteur par appareil : **OK** allume
+si c'est éteint, éteint si c'est allumé (ampoule jaune « Allumée », ampoule grise
+« Éteinte », petite roue pendant l'envoi). Le dernier état connu est gardé sur la TV.
+Si l'état affiché n'est plus le bon (lampe changée à la voix ou depuis l'appli Tapo),
+**maintiens OK** : un menu propose **Allumer** et **Éteindre** séparément.
+En cas d'échec, la tuile revient à son état précédent et un message explique pourquoi.
+Chaque commande lance une routine Alexa par l'intermédiaire de
 [Voice Monkey](https://voicemonkey.io). L'appli ne contient aucun identifiant :
 tout se règle sur la TV, dans **Paramètres › Maison**.
 
