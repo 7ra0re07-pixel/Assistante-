@@ -73,8 +73,12 @@ tout se règle sur la TV, dans **Paramètres › Maison**.
 
 ### 3. Configurer la TV
 
-1. **Paramètres › Maison** : sélectionne le champ **Clé Voice Monkey**, tape ou
-   colle ta clé, puis choisis **Vérifier la clé**.
+1. **Paramètres › Maison** : appuie sur **OK** sur le champ **Clé Voice Monkey**,
+   tape ta clé avec le clavier de la TV, puis **Entrée** (ou OK) pour valider.
+   **Retour** ferme le clavier sans quitter la page. Choisis ensuite **Vérifier la clé**.
+   - Plus simple : **Saisir depuis mon téléphone**. Un QR code s'affiche ; scanne-le
+     avec ton téléphone (connecté au même Wi-Fi que la TV), colle la clé et touche
+     **Envoyer à la TV**. La même option existe dans la fiche d'un appareil et pour la ville de la météo.
 2. **Ajouter un appareil** : un nom (« Lampe salon »), la routine pour allumer,
    la routine pour éteindre. Les boutons **Tester** lancent chaque routine tout de suite.
 3. Sur un appareil : **OK** pour le modifier ou le retirer, **Droite** pour le
@@ -86,6 +90,10 @@ tout se règle sur la TV, dans **Paramètres › Maison**.
   Elle n'est jamais écrite dans le code ni envoyée sur GitHub.
 - Dans l'appli Android, la clé part dans l'en-tête de la requête vers
   `api-v3.voicemonkey.io`, pas dans l'adresse.
+- **Saisir depuis mon téléphone** : la page est servie par la TV elle-même, sur ton
+  Wi-Fi (aucun site extérieur). Son adresse contient un code aléatoire, elle ne sert
+  qu'une fois et s'arrête au bout de 10 minutes ou dès que tu fais Retour. Utilise-la
+  uniquement sur le Wi-Fi de la maison.
 - Pour l'effacer : vide le champ **Clé Voice Monkey**. Pour la révoquer
   complètement : **Delete** sur la ligne du token dans la console Voice Monkey.
 

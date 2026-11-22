@@ -194,7 +194,10 @@
   /* ---------- Mise à l'échelle 16:9 ---------- */
   // La scène fait 1920×1080 ; on la réduit pour tenir entièrement dans l'écran, puis on la centre.
   // « Taille de l'affichage » (paramètres) la réduit encore si la TV rogne les bords (overscan).
+  let typing = null, fitPending = false; // champ de texte en cours de saisie
   function fit() {
+    // pendant la saisie, le clavier de la TV peut changer la taille de la fenêtre : on ne bouge rien
+    if (typing) { fitPending = true; return; }
     const de = document.documentElement;
     const W = de.clientWidth || innerWidth, H = de.clientHeight || innerHeight;
     if (!W || !H) return;
@@ -835,6 +838,7 @@
     const def = pageDef(); def.onEnter && def.onEnter();
   }
   function goBack() {
+    stopTyping();
     const def = pageDef(); def.onLeave && def.onLeave();
     document.activeElement?.blur?.();
     const prev = stack.pop();
@@ -960,7 +964,7 @@
       citySearch.status = net.online ? 'La recherche n’a pas abouti. Réessayez dans un instant.' : 'Pas de connexion Internet : recherche impossible pour le moment.';
     }
     if (layer === 'settings' && nav.page === 'city') {
-      if (citySearch.results && citySearch.results.length) nav.idx = 2; // premier résultat
+      if (citySearch.results && citySearch.results.length) nav.idx = 3; // premier résultat
       renderSettings();
     }
   }
@@ -1050,6 +1054,8 @@
             label: 'Clé Voice Monkey (enregistrée uniquement sur cette TV)', placeholder: 'Tape ou colle ta clé (token)',
             note: () => (home.key.trim() ? `Clé enregistrée sur cette TV (se termine par ${home.key.trim().slice(-4)})` : 'Aucune clé : la rangée Maison invite à configurer tes appareils.'),
             ok: () => focusField('key') },
+          phoneEntry('Clé Voice Monkey', [{ id: 'key', store: home, label: 'Clé Voice Monkey (token)', secret: true, max: 200 }],
+            () => { keyTest = ''; homeChanged(); toast('Clé reçue du téléphone et enregistrée sur la TV'); }),
           { label: 'Vérifier la clé', value: keyTest || '›', ok: testKey },
           { header: true, label: home.devices.length ? 'Appareils' : 'Aucun appareil pour l’instant.' },
           ...home.devices.map(d => {
@@ -1061,7 +1067,8 @@
           { label: 'Ajouter un appareil', value: 'Créer ›', cls: 'special', ok: () => openDevEditor(null) }
         ];
         return { title: 'Maison', entries,
-          onInput: () => { keyTest = ''; homeChanged(); },
+          onInput: () => { keyTest = ''; saveHome(); },
+          onTyped: () => rebuildHome(),
           hint: grab ? `Haut et Bas pour déplacer ${(home.devices.find(d => d.id === grab.id) || {}).name || ''}, OK pour le poser.`
             : k ? 'OK sur un appareil pour le modifier ou le tester, Droite pour le déplacer.' : 'Commence par ta clé Voice Monkey (voir le guide dans le README).' };
       }
@@ -1074,6 +1081,10 @@
           { label: 'Tester « Allumer »', value: devTest.on || '›', ok: () => testRoutine('on') },
           { field: 'hoff', store: devForm, label: 'Routine pour éteindre', maxlength: 120, placeholder: 'ex. lampe-salon-off', ok: () => focusField('hoff') },
           { label: 'Tester « Éteindre »', value: devTest.off || '›', ok: () => testRoutine('off') },
+          phoneEntry(devEdit ? devEdit.name : 'Nouvel appareil', [
+            { id: 'hname', store: devForm, label: 'Nom (ex. Lampe salon)', max: 30 },
+            { id: 'hon', store: devForm, label: 'Routine pour allumer', max: 120 },
+            { id: 'hoff', store: devForm, label: 'Routine pour éteindre', max: 120 }], () => toast('Reçu du téléphone : vérifie puis enregistre')),
           { label: devEdit ? 'Enregistrer' : 'Ajouter l’appareil', cls: 'primary', value: '', ok: saveDevice },
           ...(devEdit ? [{ label: confirmRemove ? 'Appuyez de nouveau sur OK pour retirer' : 'Retirer cet appareil', cls: 'danger', value: '', ok: removeDevice }] : [])
         ]
@@ -1180,7 +1191,8 @@
           { header: true, label: `Ville actuelle : ${esc(cityLabel())}${c.region ? ', ' + esc(c.region) : ''}` },
           { field: 'q', store: citySearch, label: 'Nom de ville ou code postal', placeholder: 'Exemple : Sedan ou 08200',
             ok: () => focusField('q'), onEnter: runCitySearch },
-          { label: 'Rechercher', cls: 'primary', value: '', ok: runCitySearch }
+          { label: 'Rechercher', cls: 'primary', value: '', ok: runCitySearch },
+          phoneEntry('Ville pour la météo', [{ id: 'q', store: citySearch, label: 'Nom de ville ou code postal', max: 80 }], runCitySearch)
         ];
         if (citySearch.status) entries.push({ header: true, label: esc(citySearch.status) });
         (citySearch.results || []).forEach(x => entries.push({ label: esc(x.name),
@@ -1288,13 +1300,119 @@
 
   const selectable = (def) => def.entries.filter(e => !e.header);
   const currentEntry = () => selectable(pageDef())[nav.idx];
+  /* ---------- Saisie de texte ---------- */
+  // Le champ s'ouvre au RELÂCHEMENT de OK : sinon le même appui, reçu par le champ, le refermait aussitôt.
+  let pendingField = null, pendingTimer = 0, renderPending = false;
+  const bridgeCall = (fn, ...a) => { if (hasBridge() && typeof window.AndroidTV[fn] === 'function') { try { return window.AndroidTV[fn](...a); } catch { /* ignoré */ } } };
   function focusField(f) {
-    const inp = $('fld-' + f); if (!inp) return;
-    inp.focus(); const n = inp.value.length; try { inp.setSelectionRange(n, n); } catch { /* ignoré */ }
-    if (hasBridge() && typeof window.AndroidTV.showKeyboard === 'function') window.AndroidTV.showKeyboard();
+    pendingField = f; clearTimeout(pendingTimer);
+    pendingTimer = setTimeout(openPendingField, 450); // si le relâchement n'arrive jamais
+  }
+  function openPendingField() {
+    clearTimeout(pendingTimer);
+    const f = pendingField; pendingField = null;
+    const inp = f && $('fld-' + f);
+    if (!inp || layer !== 'settings') return;
+    startTyping(f);
+    inp.focus();
+    const n = inp.value.length; try { inp.setSelectionRange(n, n); } catch { /* ignoré */ }
+    bridgeCall('showKeyboard');
+  }
+  function startTyping(f) {
+    if (typing && typing.field === f) return;
+    typing = { field: f, since: performance.now() };
+    bridgeCall('setTyping', true);
+    const li = $('fld-' + f) && $('fld-' + f).closest('.setting');
+    if (li) li.classList.add('editing');
+    $('settingsHint').textContent = 'Écris avec le clavier, puis Entrée (ou OK) pour valider. Retour pour fermer le clavier.';
+  }
+  // validate : Entrée/OK ; sinon Retour (le texte déjà tapé est gardé)
+  function finishTyping(validate) {
+    if (!typing) return;
+    const f = typing.field; typing = null;
+    pendingField = null; clearTimeout(pendingTimer);
+    const inp = $('fld-' + f);
+    if (inp) inp.blur();
+    bridgeCall('hideKeyboard');
+    if (fitPending) { fitPending = false; fit(); }
+    renderPending = false;
+    if (layer !== 'settings') return;
+    const def = pageDef();
+    def.onTyped && def.onTyped();
+    const e = def.entries.find(x => x.field === f);
+    sound(validate ? 'select' : 'back');
+    if (validate && e && e.onEnter) return e.onEnter();
+    renderSettings();
+  }
+  function stopTyping() { // fermeture des paramètres, retour, bouton Home…
+    pendingField = null; clearTimeout(pendingTimer);
+    if (!typing) return;
+    typing = null; document.activeElement?.blur?.(); bridgeCall('hideKeyboard');
+    if (fitPending) { fitPending = false; fit(); }
   }
 
+  /* ---------- Saisir depuis mon téléphone (QR code) ---------- */
+  // L'appli Android ouvre une petite page sur le Wi-Fi de la maison : rien ne passe par Internet.
+  let phone = null;
+  const phoneSupported = () => hasBridge() && typeof window.AndroidTV.startPhoneInput === 'function';
+  function phoneEntry(title, fields, done) {
+    return { label: 'Saisir depuis mon téléphone', value: phoneSupported() ? 'QR code ›' : 'Dans l’appli Android TV',
+      ok: () => openPhoneInput(title, fields, done) };
+  }
+  function openPhoneInput(title, fields, done) {
+    if (!phoneSupported()) { sound('edge'); return toast('La saisie depuis le téléphone fonctionne dans l’appli Android TV.', true); }
+    let res = null;
+    try {
+      res = JSON.parse(window.AndroidTV.startPhoneInput(JSON.stringify({ title,
+        fields: fields.map(f => ({ id: f.id, label: f.label, secret: !!f.secret, value: f.secret ? '' : String(f.store[f.id] || '') })) })));
+    } catch { res = null; }
+    if (!res || !res.ok) { sound('edge'); return toast((res && res.error) || 'Impossible de démarrer la saisie depuis le téléphone.', true); }
+    phone = { title, fields, done, url: res.url };
+    renderPhonePanel();
+    $('phonePanel').classList.add('open'); $('phonePanel').setAttribute('aria-hidden', 'false');
+    layer = 'phone';
+  }
+  function renderPhonePanel() {
+    let qr = '';
+    try { const q = qrcode(0, 'M'); q.addData(phone.url); q.make(); qr = q.createSvgTag({ cellSize: 8, margin: 3, scalable: true }); }
+    catch { qr = ''; }
+    $('phoneCard').innerHTML = `<h2>Saisir depuis mon téléphone</h2>
+      <div class="phone-wrap"><div class="phone-qr">${qr}</div>
+      <ol class="phone-steps"><li>Connecte ton téléphone au <b>même Wi-Fi</b> que la TV.</li>
+      <li>Scanne ce QR code avec l’appareil photo du téléphone.</li>
+      <li>Colle ou tape le texte, puis touche <b>« Envoyer à la TV »</b>.</li></ol></div>
+      <p class="phone-url">Ou ouvre cette adresse : <b>${esc(phone.url)}</b></p>
+      <p class="phone-wait">En attente du téléphone…</p>
+      <p class="details-hint">Retour pour annuler. La page ne sert qu’une fois et s’arrête au bout de 10 minutes.</p>`;
+  }
+  function closePhone(silent) {
+    if (!phone) return;
+    phone = null; bridgeCall('stopPhoneInput');
+    $('phonePanel').classList.remove('open'); $('phonePanel').setAttribute('aria-hidden', 'true');
+    layer = 'settings';
+    if (!silent) sound('back');
+    renderSettings();
+  }
+  window.tvPhoneInput = (json) => {
+    if (!phone) return;
+    let data; try { data = typeof json === 'string' ? JSON.parse(json) : json; } catch { return; }
+    const p = phone;
+    p.fields.forEach(f => {
+      const v = typeof data[f.id] === 'string' ? data[f.id].trim().slice(0, f.max || 300) : null;
+      if (v === null || (f.secret && !v)) return; // champ secret laissé vide : on garde l'ancien
+      f.store[f.id] = v;
+    });
+    phone = null;
+    $('phonePanel').classList.remove('open'); $('phonePanel').setAttribute('aria-hidden', 'true');
+    layer = 'settings'; sound('select');
+    if (saverOn) stopSaver(); else resetIdle();
+    renderSettings();
+    if (p.done) p.done();
+  };
+  window.tvPhoneInputEnded = () => { if (phone) { toast('La page pour le téléphone a expiré. Recommence si besoin.', true); closePhone(true); } };
+
   function renderSettings() {
+    if (typing) { renderPending = true; return; } // ne jamais redessiner sous le clavier
     const def = pageDef();
     const sel = selectable(def);
     nav.idx = Math.max(0, Math.min(sel.length - 1, nav.idx));
@@ -1322,10 +1440,20 @@
       return `<li class="${cls}" data-i="${k}"><span class="row-left">${e.label}</span><span class="val">${e.value ?? ''}</span></li>`;
     }).join('');
     def.entries.filter(e => e.field).forEach(e => {
-      $('fld-' + e.field).addEventListener('input', (ev) => {
+      const inp = $('fld-' + e.field);
+      inp.addEventListener('input', (ev) => {
         e.store[e.field] = ev.target.value;
         if (e.note) $('fld-note-' + e.field).textContent = e.note();
         def.onInput && def.onInput();
+      });
+      inp.addEventListener('blur', () => {
+        if (!typing || typing.field !== e.field) return;
+        // focus perdu tout seul juste après l'ouverture (la TV réorganise sa fenêtre) : on le rend au champ
+        if (layer === 'settings' && performance.now() - typing.since < 1500) {
+          setTimeout(() => { if (typing && typing.field === e.field && document.activeElement !== inp) { inp.focus(); bridgeCall('showKeyboard'); } }, 30);
+          return;
+        }
+        finishTyping(false);
       });
     });
     keepSettingVisible();
@@ -1382,7 +1510,7 @@
     sound(k === 'ok' ? 'select' : 'move');
     const page = nav.page;
     fn();
-    if (layer === 'settings' && nav.page === page && document.activeElement?.tagName !== 'INPUT') renderSettings();
+    if (layer === 'settings' && nav.page === page && !typing && !pendingField) renderSettings();
   }
   function openSettings() {
     sound('select'); pane = 'menu'; enterCat(0);
@@ -1390,6 +1518,7 @@
     openLayer('settings', 'settings');
   }
   function closeSettings() {
+    stopTyping();
     const def = pageDef(); def.onLeave && def.onLeave();
     document.activeElement?.blur?.();
     $('settings').classList.remove('open'); $('settings').setAttribute('aria-hidden', 'true');
@@ -1584,6 +1713,7 @@
   }
   function startSaver() {
     if (saverOn || splashOn) return;
+    if (typing || phone) return resetIdle(); // pas de veille pendant une saisie
     saverOn = true; buildScenes(); tick(); renderWeather();
     showScene(Math.floor(Math.random() * $('saverScenes').children.length));
     clearInterval(sceneTimer);
@@ -1631,13 +1761,24 @@
     const k = KEY[e.key] || CODE[e.keyCode];
     if (splashOn || saverOn) { e.preventDefault(); return wake(); } // n'importe quelle touche
     resetIdle();
-    if (document.activeElement?.tagName === 'INPUT') { // saisie : on laisse le texte s'écrire
-      const act = { ArrowUp: 'up', ArrowDown: 'down', Enter: 'enter', Escape: 'stay', GoBack: 'stay' }[e.key] || (e.keyCode === 4 ? 'stay' : null);
-      if (!act) return;
-      e.preventDefault(); document.activeElement.blur();
-      if (act === 'stay') return renderSettings();
-      if (act === 'enter') { const ce = currentEntry(); if (ce && ce.onEnter) { ce.onEnter(); return; } return settingsKey('down'); }
-      return settingsKey(act);
+    if (pendingField) { e.preventDefault(); return; } // OK encore enfoncé : le champ s'ouvrira au relâchement
+    const ae = document.activeElement;
+    if (typing || ae?.tagName === 'INPUT') { // saisie : la télécommande ne vole jamais le focus du champ
+      if (!typing && ae?.id?.startsWith('fld-')) startTyping(ae.id.slice(4));
+      const isBack = e.key === 'Escape' || e.key === 'GoBack' || e.key === 'BrowserBack' || e.keyCode === 4 || e.keyCode === 27;
+      const isEnter = e.key === 'Enter' || e.keyCode === 13 || e.keyCode === 23;
+      if (isBack) { e.preventDefault(); return finishTyping(false); }
+      if (isEnter) {
+        e.preventDefault();
+        if (e.repeat || !typing || performance.now() - typing.since < 600) return; // reste de l'appui qui a ouvert le champ
+        return finishTyping(true);
+      }
+      if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.keyCode === 38 || e.keyCode === 40) { e.preventDefault(); return; }
+      if (ae?.tagName === 'INPUT' && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) { // au bord du texte : on reste dans le champ
+        let st = 0, en = 0; try { st = ae.selectionStart; en = ae.selectionEnd; } catch { /* ignoré */ }
+        if ((e.key === 'ArrowLeft' && st === 0 && en === 0) || (e.key === 'ArrowRight' && st === ae.value.length)) e.preventDefault();
+      }
+      return; // lettres, effacement, flèches dans le texte : laissées au champ
     }
     if (!k) return;
     e.preventDefault();
@@ -1646,12 +1787,20 @@
     lastKey = now;
     handle(k);
   });
+  addEventListener('keyup', (e) => {
+    if (!pendingField) return;
+    if (KEY[e.key] === 'ok' || CODE[e.keyCode] === 'ok') { e.preventDefault(); openPendingField(); }
+  });
   function wake() { if (splashOn) endSplash(); else if (saverOn) stopSaver(); }
   // Utilisé par le lanceur Android (touches Retour / OK transmises par l'appli)
   window.tvHandleKey = (k) => {
     if (splashOn || saverOn) return wake();
     resetIdle();
-    if (document.activeElement?.tagName === 'INPUT') { document.activeElement.blur(); return renderSettings(); }
+    if (pendingField) { pendingField = null; clearTimeout(pendingTimer); }
+    if (typing || document.activeElement?.tagName === 'INPUT') { // Retour : ferme le clavier, on reste sur la page
+      if (!typing) { document.activeElement.blur(); return renderSettings(); }
+      return finishTyping(k === 'ok');
+    }
     handle(k);
   };
 
@@ -1659,6 +1808,7 @@
     if (layer === 'details') { if (k === 'back' || k === 'ok') closeLayer('details'); return; }
     if (layer === 'weather') { if (k === 'back' || k === 'ok') closeLayer('weatherPanel'); return; }
     if (layer === 'network') return networkKey(k);
+    if (layer === 'phone') { if (k === 'back' || k === 'ok') closePhone(); return; }
     if (layer === 'settings') return settingsKey(k);
     if (k === 'ok') return activate(focusedEl);
     if (k === 'back') { const h = homeRow(); if (r !== h || c !== 0) { sound('back'); focus(h, 0, false); } return; }
@@ -1681,8 +1831,10 @@
   $('settingsList').addEventListener('click', (e) => {
     const li = e.target.closest('.setting'); if (!li || e.target.tagName === 'INPUT') return;
     pane = 'content'; nav.idx = +li.dataset.i; settingsKey('ok');
+    if (pendingField) openPendingField(); // souris : pas de relâchement de OK à attendre
   });
   $('settingsList').addEventListener('focusin', (e) => { // clic direct dans un champ
+    if (e.target.id && e.target.id.startsWith('fld-')) startTyping(e.target.id.slice(4));
     const li = e.target.closest('.setting'); if (li && nav.idx !== +li.dataset.i) { pane = 'content'; nav.idx = +li.dataset.i; [...$('settingsList').children].forEach(x => x.classList.toggle('focused', x === li)); }
   });
   $('netCard').addEventListener('click', (e) => {
@@ -1690,6 +1842,7 @@
     netIdx = +li.dataset.i; networkKey('ok');
   });
   $('details').addEventListener('click', () => closeLayer('details'));
+  $('phonePanel').addEventListener('click', () => closePhone());
   $('weatherPanel').addEventListener('click', () => closeLayer('weatherPanel'));
   ['mousemove', 'mousedown', 'wheel', 'touchstart'].forEach(ev => addEventListener(ev, () => {
     if (saverOn && ev !== 'mousemove') return stopSaver();
@@ -1702,6 +1855,8 @@
   window.tvGoHome = () => {
     if (saverOn) stopSaver();
     if (splashOn) endSplash();
+    stopTyping();
+    if (layer === 'phone') closePhone(true);
     document.activeElement?.blur?.();
     if (layer === 'settings') closeSettings();
     else if (layer === 'details') closeLayer('details');

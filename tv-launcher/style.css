@@ -518,3 +518,15 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 
 /* Message d'erreur */
 .toast.error { background: #D9363E; color: #fff; max-width: 1400px; text-align: center; }
+
+/* Saisie en cours dans un champ, et saisie depuis le téléphone */
+.setting.field.editing { box-shadow: 0 0 0 4px var(--accent); }
+.phone-card { width: min(1240px, 90vw); }
+.phone-wrap { display: flex; align-items: center; margin: 8px 0 24px; }
+.phone-qr { flex: 0 0 auto; width: 340px; height: 340px; padding: 14px; border-radius: 22px; background: #fff; margin-right: 48px; }
+.phone-qr svg { display: block; width: 100%; height: 100%; }
+.phone-steps { padding-left: 1.2em; font-size: calc(32px * var(--ts)); line-height: 1.45; color: var(--text-2); }
+.phone-steps li + li { margin-top: 14px; }
+.phone-steps b, .phone-url b { color: var(--text); }
+.phone-url { font-size: calc(26px * var(--ts)); color: var(--muted); word-break: break-all; max-width: none; }
+.details-card p.phone-wait { margin-top: 18px; font-size: calc(30px * var(--ts)); color: var(--accent); }

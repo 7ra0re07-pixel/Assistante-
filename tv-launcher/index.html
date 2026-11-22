@@ -83,6 +83,11 @@
     <div class="details-card net-card" id="netCard"></div>
   </div>
 
+  <!-- Saisie depuis le téléphone (QR code) -->
+  <div class="details" id="phonePanel" aria-hidden="true">
+    <div class="details-card phone-card" id="phoneCard"></div>
+  </div>
+
   <!-- Mode veille -->
   <div class="saver" id="saver" aria-hidden="true">
     <div class="saver-scenes" id="saverScenes"></div>
@@ -110,6 +115,7 @@
 
   <div class="toast" id="toast" role="status"></div>
 
+  <script src="vendor/qrcode.js"></script>
   <script src="data.js"></script>
   <script src="app.js"></script>
 </body>

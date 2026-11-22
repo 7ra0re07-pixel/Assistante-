@@ -54,7 +54,7 @@
             android:launchMode="singleTask"
             android:screenOrientation="landscape"
             android:stateNotNeeded="true"
-            android:windowSoftInputMode="adjustPan">
+            android:windowSoftInputMode="adjustPan|stateHidden">
 
             <!-- Apparaît dans la liste des applis de la TV -->
             <intent-filter>

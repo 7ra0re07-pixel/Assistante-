@@ -20,7 +20,9 @@ L'interface web de ce dossier est aussi livrée comme une vraie appli Android TV
 | `openStore(paquet)` | ouvre la page Play Store d'une appli absente |
 | `openUrl(adresse)` | ouvre un lien hors du lanceur (navigateur ou appli) |
 | `openSystemSettings()` | ouvre les paramètres de la TV |
-| `showKeyboard()` | affiche le clavier pour un champ de saisie |
+| `showKeyboard()` / `hideKeyboard()` | affiche ou referme le clavier pour un champ de saisie |
+| `setTyping(vrai/faux)` | saisie en cours : le plein écran immersif est mis en pause pour ne pas refermer le clavier |
+| `startPhoneInput(formulaire)` / `stopPhoneInput()` | « Saisir depuis mon téléphone » : petite page locale (Wi-Fi), code aléatoire, usage unique, 10 min ; renvoie le texte via `tvPhoneInput(json)` |
 
   En retour, l'appli appelle `tvHandleKey('back')` (bouton Retour),
   `tvGoHome()` (bouton Home) et `tvOnResume()` (retour dans le lanceur).

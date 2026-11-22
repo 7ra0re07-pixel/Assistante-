@@ -66,6 +66,9 @@ public class MainActivity extends Activity {
     private String installedCache = null;
     private ConnectivityManager.NetworkCallback netCallback = null;
     private static final int REQ_WIFI_NAME = 42;
+    // Vrai pendant la saisie dans un champ : on ne touche pas au plein écran (cela refermerait le clavier)
+    private volatile boolean typing = false;
+    private PhoneInput phoneInput = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -237,6 +240,7 @@ public class MainActivity extends Activity {
     }
 
     private void hideSystemBars() {
+        if (typing) return;
         View decor = getWindow().getDecorView();
         decor.setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN
                 | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
@@ -298,6 +302,7 @@ public class MainActivity extends Activity {
         if (netCallback != null && Build.VERSION.SDK_INT >= 24) {
             try { ((ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE)).unregisterNetworkCallback(netCallback); } catch (Exception ignored) { }
         }
+        if (phoneInput != null) phoneInput.stop();
         if (web != null) web.destroy();
         super.onDestroy();
     }
@@ -482,11 +487,55 @@ public class MainActivity extends Activity {
         /** Affiche le clavier de la TV pour le champ de saisie sélectionné. */
         @JavascriptInterface
         public void showKeyboard() {
+            typing = true;
             runOnUiThread(() -> {
-                web.requestFocus();
-                InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
-                if (imm != null) imm.showSoftInput(web, InputMethodManager.SHOW_IMPLICIT);
+                if (!web.hasFocus()) web.requestFocus();
+                // petit délai : le champ doit avoir le focus avant que le clavier s'y attache
+                web.postDelayed(() -> {
+                    if (!typing) return;
+                    InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+                    if (imm != null) imm.showSoftInput(web, 0);
+                }, 120);
             });
+        }
+
+        /** Referme le clavier (saisie validée ou annulée). */
+        @JavascriptInterface
+        public void hideKeyboard() {
+            typing = false;
+            runOnUiThread(() -> {
+                InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+                if (imm != null) imm.hideSoftInputFromWindow(web.getWindowToken(), 0);
+                hideSystemBars();
+            });
+        }
+
+        /** Saisie en cours : le plein écran immersif est mis en pause pour ne pas fermer le clavier. */
+        @JavascriptInterface
+        public void setTyping(boolean on) {
+            typing = on;
+            if (!on) runOnUiThread(MainActivity.this::hideSystemBars);
+        }
+
+        /** « Saisir depuis mon téléphone » : démarre la petite page locale et renvoie son adresse. */
+        @JavascriptInterface
+        public String startPhoneInput(String formJson) {
+            if (phoneInput == null) {
+                phoneInput = new PhoneInput(new PhoneInput.Listener() {
+                    @Override public void onReceived(String json) {
+                        runOnUiThread(() -> js("window.tvPhoneInput && tvPhoneInput(" + JSONObject.quote(json) + ")"));
+                    }
+                    @Override public void onEnded() {
+                        runOnUiThread(() -> js("window.tvPhoneInputEnded && tvPhoneInputEnded()"));
+                    }
+                });
+            }
+            return phoneInput.start(formJson);
+        }
+
+        @JavascriptInterface
+        public void stopPhoneInput() {
+            if (phoneInput != null) phoneInput.stop();
         }
 
         /** Taille réelle de l'écran et densité, pour le diagnostic (Paramètres → Écran). */
