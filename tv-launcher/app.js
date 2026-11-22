@@ -78,8 +78,9 @@
     const t = el('button', 'tile tile-app focusable');
     t.style.setProperty('--tc1', a.colors[0]); t.style.setProperty('--tc2', a.colors[1]); t.style.setProperty('--tc3', a.colors[2]);
     t.style.setProperty('--logo', a.logoColor);
-    const logo = a.logoStyle === 'play' ? `<span class="play"></span>${a.name}` : a.name;
-    t.innerHTML = `<span class="app-logo ${a.logoStyle}">${logo}</span>`;
+    t.innerHTML = `<span class="app-bg" style="background-image:url(${a.icon})"></span>
+      <img class="app-icon" src="${a.icon}" alt="" draggable="false">
+      <span class="app-label">${a.name}</span>`;
     t.setAttribute('aria-label', a.name);
     t._item = { kind: 'app', title: a.name, source: a.id, desc: a.desc, tags: [], colors: a.colors, action: 'Ouvrir' };
     return t;
@@ -89,7 +90,7 @@
     const t = el('button', 'tile focusable ' + (wide ? 'tile-wide' : 'tile-poster'));
     t.style.setProperty('--tc1', it.colors[0]);
     t.innerHTML = `<div class="art" style="background:${art(it.colors)}"></div><div class="art-shade"></div>
-      <span class="badge" style="--badge:${a.logoColor === '#FFFFFF' ? '#fff' : a.logoColor}">${a.name}</span>
+      <span class="badge"><img src="${a.icon}" alt="">${a.name}</span>
       <div class="tile-info"><div class="tile-title">${it.title}</div>
       ${wide ? `<div class="tile-sub">${it.sub}</div><div class="progress"><i style="width:${Math.round(it.progress * 100)}%"></i></div>` : ''}</div>`;
     t.setAttribute('aria-label', `${it.title}, sur ${a.name}`);
@@ -121,7 +122,7 @@
   function renderHero(item, animate) {
     const apply = () => {
       const a = appById[item.source];
-      $('heroSource').innerHTML = item.kind === 'app' ? '<span class="dot"></span>Application' : `<span class="dot"></span>Sur ${a.name}`;
+      $('heroSource').innerHTML = `<img class="src-icon" src="${a.icon}" alt="">` + (item.kind === 'app' ? 'Application' : `Sur ${a.name}`);
       $('heroTitle').textContent = item.title;
       $('heroDesc').textContent = item.desc;
       $('heroTags').innerHTML = (item.tags || []).filter(Boolean).map(t => `<span class="tag">${t}</span>`).join('');
@@ -179,6 +180,7 @@
       y = Math.min(row.el.offsetTop - 190, scroller.scrollHeight - 1080);
     }
     $('scroller').style.transform = `translateY(${-y}px)`;
+    ROWS.forEach(row => { row.el.style.opacity = row.el.offsetTop + row.el.offsetHeight - y < 260 ? 0 : 1; });
     $('hero').style.opacity = r > 2 ? 0 : 1;
     $('stage').classList.toggle('scrolled', r > 2);
   }
