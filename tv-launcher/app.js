@@ -12,7 +12,7 @@
   function load(k, def) { try { return JSON.parse(localStorage.getItem(k)) ?? def; } catch { return def; } }
   function save(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* stockage indisponible */ } }
   const DEFAULT_CITY = { name: 'Sedan', postcode: '08200', region: 'Ardennes', lat: 49.70, lon: 4.94 };
-  const ALL_ROWS = ['favoris', 'films', 'musique', 'recent', 'installed'];
+  const ALL_ROWS = ['favoris', 'maison', 'films', 'musique', 'recent', 'installed'];
   const prefs = Object.assign({
     city: DEFAULT_CITY, unit: 'C', showWeather: true,
     h24: true, showDate: true, sounds: true, openApps: true, reduceMotion: false,
@@ -25,6 +25,7 @@
   // Ville : Sedan par défaut (remplace l'ancien réglage par liste de villes)
   if (!prefs.city || typeof prefs.city.lat !== 'number') prefs.city = DEFAULT_CITY;
   delete prefs.cityIndex;
+  if (Array.isArray(prefs.rowOrder) && !prefs.rowOrder.includes('maison')) prefs.rowOrder.splice(prefs.rowOrder.indexOf('favoris') + 1, 0, 'maison');
   prefs.rowOrder = [...(prefs.rowOrder || []).filter(k => ALL_ROWS.includes(k)), ...ALL_ROWS.filter(k => !(prefs.rowOrder || []).includes(k))];
   prefs.rowHidden = (prefs.rowHidden || []).filter(k => ALL_ROWS.includes(k));
   const savePrefs = () => save('tv.prefs', prefs);
@@ -411,9 +412,10 @@
   const HERO = () => (prefs.banner ? 1 : -1);   // rangée de la bannière (-1 = pas de bannière)
   const FIRST = () => (prefs.banner ? 2 : 1);   // première rangée de tuiles
   const homeRow = () => (prefs.banner ? 1 : Math.min(1, NAV.length - 1));
-  const ROW_TITLES = { favoris: 'Favoris', films: 'Films & séries', musique: 'Musique', recent: 'Applis récentes', installed: 'Installées sur cette TV' };
+  const ROW_TITLES = { favoris: 'Favoris', maison: 'Maison', films: 'Films & séries', musique: 'Musique', recent: 'Applis récentes', installed: 'Installées sur cette TV' };
 
   function rowSource(key) {
+    if (key === 'maison') return homeTiles();
     if (key === 'recent') return recentApps();
     if (key === 'installed') return installed.map(installedAsApp);
     return appsInRow(key);
@@ -421,7 +423,7 @@
   function buildRows() {
     const rowsEl = $('rows'); rowsEl.innerHTML = '';
     ROWS = prefs.rowOrder.filter(k => !prefs.rowHidden.includes(k))
-      .map(k => ({ title: ROW_TITLES[k], key: k, items: rowSource(k).map(appTile) }))
+      .map(k => ({ title: ROW_TITLES[k], key: k, items: k === 'maison' ? homeTiles() : rowSource(k).map(appTile) }))
       .filter(rw => rw.items.length);
     ROWS.forEach(row => {
       const sec = el('section', 'row');
@@ -584,6 +586,7 @@
     if (target === $('weather')) return openWeather();
     if (target === $('settingsBtn')) return openSettings();
     if (target === $('heroMore')) return openDetails(heroItem);
+    if (target._home) return homeAction(target);
     const item = target === $('heroPlay') ? heroItem : target._item;
     if (item && getApp(item.source)) launch(getApp(item.source), item);
   }
@@ -631,9 +634,100 @@
   }
 
   let toastTimer = 0;
-  function toast(msg) {
-    const t = $('toast'); t.textContent = msg; t.classList.add('show');
-    clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
+  function toast(msg, isError) {
+    const t = $('toast'); t.textContent = msg; t.classList.add('show'); t.classList.toggle('error', !!isError);
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), isError ? 5000 : 2600);
+  }
+
+  /* ---------- Maison : appareils pilotés par des routines Voice Monkey ---------- */
+  // La clé et les appareils sont enregistrés uniquement sur cette TV (stockage local), jamais dans le code.
+  const VM_API = 'https://api-v3.voicemonkey.io/';
+  let home = load('tv.home', null);
+  if (!home || typeof home !== 'object') home = {};
+  home.key = typeof home.key === 'string' ? home.key : '';
+  home.devices = Array.isArray(home.devices) ? home.devices.filter(d => d && d.id && d.name) : [];
+  const saveHome = () => save('tv.home', home);
+  const homeReady = () => !!home.key.trim() && home.devices.some(d => d.on || d.off);
+
+  // Requête vers Voice Monkey : par l'appli Android (clé envoyée dans l'en-tête), sinon par le navigateur
+  let httpSeq = 0; const httpWait = {};
+  window.tvHttpResult = (id, status, body) => { const cb = httpWait[id]; delete httpWait[id]; if (cb) cb({ status: Number(status) || 0, body: body || '' }); };
+  function vmRequest(path, params) {
+    const query = Object.keys(params).map(k => `${k}=${encodeURIComponent(params[k])}`).join('&');
+    if (hasBridge() && typeof window.AndroidTV.httpGet === 'function') {
+      return new Promise(res => {
+        const id = 'r' + (++httpSeq);
+        httpWait[id] = res;
+        setTimeout(() => { if (httpWait[id]) { delete httpWait[id]; res({ status: 0, body: '' }); } }, 20000);
+        window.AndroidTV.httpGet(id, VM_API + path + (query ? '?' + query : ''), home.key.trim());
+      });
+    }
+    const url = VM_API + path + '?' + [`token=${encodeURIComponent(home.key.trim())}`, query].filter(Boolean).join('&');
+    return fetch(url).then(r => r.text().then(body => ({ status: r.status, body })))
+      // navigateur qui bloque la lecture de la réponse : la commande part, sans confirmation possible
+      .catch(() => fetch(url, { mode: 'no-cors' }).then(() => ({ status: -1, body: '' })).catch(() => ({ status: 0, body: '' })));
+  }
+  // Traduit la réponse de Voice Monkey en message clair
+  function vmResult(res, routine) {
+    let err = '';
+    try { err = String(JSON.parse(res.body).error || ''); } catch { err = /^[A-Z_]+/.test(res.body) ? res.body : ''; }
+    err = err.split(':')[0];
+    if (res.status === 200 && !err) return { ok: true };
+    if (res.status === -1) return { ok: true, unsure: true };
+    if (res.status === 0) return { ok: false, msg: net.online ? 'Voice Monkey ne répond pas. Réessaie dans un instant.' : 'Pas de connexion Internet : la commande n’a pas été envoyée.' };
+    const badKey = 'Clé Voice Monkey refusée : vérifie-la dans Paramètres > Maison.';
+    const M = {
+      UNAUTHORIZED: badKey, INVALID_TOKEN: badKey, USER_NOT_FOUND: badKey,
+      DEVICE_NOT_FOUND: `Routine « ${routine} » introuvable sur ton compte Voice Monkey : vérifie son identifiant.`,
+      MISSING_DEVICE: 'Aucune routine indiquée pour cette commande.',
+      THROTTLED: 'Trop de commandes d’affilée : réessaie dans un instant.',
+      MONTHLY_QUOTA_EXCEEDED: 'Quota mensuel Voice Monkey atteint : les commandes reprendront le mois prochain.',
+      ALEXA_TRIGGER_FAILED: 'Alexa n’a pas pu lancer la routine : réessaie.'
+    };
+    if (M[err]) return { ok: false, msg: M[err] };
+    if (res.status === 401 || res.status === 403) return { ok: false, msg: badKey };
+    if (res.status === 404) return { ok: false, msg: M.DEVICE_NOT_FOUND };
+    if (res.status === 429) return { ok: false, msg: M.THROTTLED };
+    return { ok: false, msg: `La commande a échoué (erreur ${res.status}). Réessaie dans un instant.` };
+  }
+  async function triggerRoutine(routine) {
+    routine = (routine || '').trim();
+    if (!home.key.trim()) return { ok: false, msg: 'Ajoute ta clé Voice Monkey dans Paramètres > Maison.' };
+    if (!routine) return { ok: false, msg: 'Aucune routine indiquée pour cette commande.' };
+    if (!net.online) return { ok: false, msg: 'Pas de connexion Internet : la commande n’a pas été envoyée.' };
+    return vmResult(await vmRequest('trigger', { device: routine }), routine);
+  }
+
+  // Tuiles de la rangée Maison : « Allumer » et « Éteindre » pour chaque appareil
+  const H_ICONS = {
+    on: '<svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 21h4" stroke="currentColor" stroke-width="1.8"/><path d="M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.3 1.1 2.2h5c0-.9.4-1.6 1.1-2.2A6 6 0 0 0 12 3z" fill="currentColor"/><path d="M3.2 4.2l1.5 1.4M20.8 4.2l-1.5 1.4M1.5 10.5h2M20.5 10.5h2" stroke="currentColor" stroke-width="1.8"/></svg>',
+    off: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.3 1.1 2.2h5c0-.9.4-1.6 1.1-2.2A6 6 0 0 0 12 3z"/></svg>',
+    setup: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M12 13v4M10 15h4"/></svg>'
+  };
+  function homeTile(kind, device) {
+    const t = el('button', `tile tile-home ${kind} focusable`);
+    const name = kind === 'setup' ? (home.key.trim() ? 'Ajoute tes appareils dans les paramètres' : 'Configure tes appareils dans les paramètres') : device.name;
+    const act = kind === 'on' ? 'Allumer' : kind === 'off' ? 'Éteindre' : 'Paramètres › Maison';
+    t.innerHTML = `<span class="h-icon">${H_ICONS[kind]}</span><span class="h-name">${esc(name)}</span><span class="h-act">${act}</span>`;
+    t.style.setProperty('--tc1', kind === 'on' ? '#FFC94D' : kind === 'off' ? '#8A94A8' : '#6FA8FF');
+    t.setAttribute('aria-label', kind === 'setup' ? name : `${act} ${device.name}`);
+    t._home = { kind, device };
+    return t;
+  }
+  function homeTiles() {
+    if (!homeReady()) return [homeTile('setup')];
+    return home.devices.flatMap(d => [...(d.on ? [homeTile('on', d)] : []), ...(d.off ? [homeTile('off', d)] : [])]);
+  }
+  async function homeAction(tile) {
+    const { kind, device } = tile._home;
+    if (kind === 'setup') return openSettingsAt('maison');
+    if (tile.classList.contains('busy')) return;
+    sound('select');
+    tile.classList.add('busy');
+    const res = await triggerRoutine(kind === 'on' ? device.on : device.off);
+    tile.classList.remove('busy');
+    if (res.ok) toast(`${device.name} : commande « ${kind === 'on' ? 'Allumer' : 'Éteindre'} » ${res.unsure ? 'envoyée' : 'exécutée'}`);
+    else { sound('edge'); toast(`${device.name} : ${res.msg}`, true); }
   }
 
   /* ---------- Fenêtres : détail, météo, réseau ---------- */
@@ -699,6 +793,7 @@
   const CATS = [
     { key: 'accueil', label: 'Accueil', icon: svg('<path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/>') },
     { key: 'applis', label: 'Applis', icon: svg('<rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/>') },
+    { key: 'maison', label: 'Maison', icon: svg('<path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.3 1.1 2.2h5c0-.9.4-1.6 1.1-2.2A6 6 0 0 0 12 3z"/>') },
     { key: 'meteo', label: 'Météo', icon: svg('<path d="M7 18h10a4 4 0 0 0 .4-8 6 6 0 0 0-11.5 1.5A3.3 3.3 0 0 0 7 18z"/>') },
     { key: 'affichage', label: 'Affichage', icon: svg('<rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/>') },
     { key: 'veille', label: 'Veille', icon: svg('<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>') },
@@ -750,6 +845,56 @@
   }
   function startGrab(id, moveFn) { grab = { id, move: moveFn }; sound('select'); }
   function libChanged() { saveLib(); rebuildHome(); }
+
+  // Maison : édition des appareils (nom, routine pour allumer, routine pour éteindre)
+  let devEdit = null, devForm = { hname: '', hon: '', hoff: '' }, devTest = {}, keyTest = '';
+  function homeChanged() { saveHome(); rebuildHome(); }
+  function openSettingsAt(catKey) {
+    if (layer !== 'settings') openSettings();
+    enterCat(Math.max(0, CATS.findIndex(ct => ct.key === catKey)));
+    pane = 'content'; renderSettings();
+  }
+  function openDevEditor(d) {
+    devEdit = d || null;
+    devForm = d ? { hname: d.name, hon: d.on || '', hoff: d.off || '' } : { hname: '', hon: '', hoff: '' };
+    devTest = {}; go('homeDevice');
+  }
+  function moveDevice(dir) {
+    const i = home.devices.findIndex(d => d.id === grab.id), j = i + dir;
+    if (j < 0 || j >= home.devices.length) return sound('edge');
+    [home.devices[i], home.devices[j]] = [home.devices[j], home.devices[i]];
+    sound('move'); homeChanged();
+  }
+  async function testKey() {
+    if (!home.key.trim()) { sound('edge'); return toast('Tape d’abord ta clé Voice Monkey.', true); }
+    keyTest = 'Vérification…'; renderSettings();
+    const res = vmResult(await vmRequest('devices', {}), '');
+    keyTest = res.ok ? (res.unsure ? 'Envoyée (réponse illisible ici)' : 'Clé valide') : 'Clé refusée';
+    toast(res.ok ? 'Clé Voice Monkey valide' : res.msg, !res.ok);
+    if (layer === 'settings') renderSettings();
+  }
+  async function testRoutine(which) {
+    const routine = devForm[which === 'on' ? 'hon' : 'hoff'];
+    if (!routine.trim()) { sound('edge'); return toast(`Indique d’abord la routine pour ${which === 'on' ? 'allumer' : 'éteindre'}.`, true); }
+    devTest[which] = 'Test en cours…'; renderSettings();
+    const res = await triggerRoutine(routine);
+    devTest[which] = res.ok ? (res.unsure ? 'Envoyée (non confirmée)' : 'OK : routine lancée') : 'Échec';
+    toast(res.ok ? `Routine « ${routine.trim()} » lancée` : res.msg, !res.ok);
+    if (layer === 'settings' && nav.page === 'homeDevice') renderSettings();
+  }
+  function saveDevice() {
+    const name = devForm.hname.trim(), on = devForm.hon.trim(), off = devForm.hoff.trim();
+    if (!name) { nav.idx = 0; sound('edge'); return toast('Donne un nom à l’appareil (ex. Lampe salon).', true); }
+    if (!on && !off) { nav.idx = 1; sound('edge'); return toast('Indique au moins une routine (allumer ou éteindre).', true); }
+    if (devEdit) Object.assign(devEdit, { name: name.slice(0, 30), on, off });
+    else home.devices.push({ id: 'dev-' + Date.now().toString(36), name: name.slice(0, 30), on, off });
+    homeChanged(); toast(`${name} enregistré`); goBack();
+  }
+  function removeDevice() {
+    if (!confirmRemove) { confirmRemove = true; return; }
+    home.devices = home.devices.filter(d => d !== devEdit);
+    homeChanged(); toast(`${devEdit.name} retiré`); goBack();
+  }
 
   // Lien saisi : adresse web ou nom de paquet Android
   function parseLink(v) {
@@ -896,6 +1041,41 @@
           lnk('Mes applis : retirer, réordonner', `${lib.items.length}`, 'manage'),
           lnk('Applis installées sur la TV', hasBridge() ? `${installed.length}` : '', 'installedList'),
           ...(hasBridge() ? [] : [tog('Ouvrir les applis installées (navigateur)', 'openApps')])
+        ]
+      };
+      case 'cat-maison': {
+        const k = home.key.trim();
+        const entries = [
+          { field: 'key', store: home, inputType: 'password', maxlength: 200, caps: 'off',
+            label: 'Clé Voice Monkey (enregistrée uniquement sur cette TV)', placeholder: 'Tape ou colle ta clé (token)',
+            note: () => (home.key.trim() ? `Clé enregistrée sur cette TV (se termine par ${home.key.trim().slice(-4)})` : 'Aucune clé : la rangée Maison invite à configurer tes appareils.'),
+            ok: () => focusField('key') },
+          { label: 'Vérifier la clé', value: keyTest || '›', ok: testKey },
+          { header: true, label: home.devices.length ? 'Appareils' : 'Aucun appareil pour l’instant.' },
+          ...home.devices.map(d => {
+            const grabbed = grab && grab.id === d.id;
+            return { id: d.id, cls: grabbed ? 'grab' : '', label: `<span>${esc(d.name)}</span>`,
+              value: grabbed ? 'Haut / Bas' : `${[d.on && 'Allumer', d.off && 'Éteindre'].filter(Boolean).join(' + ')} ›`,
+              ok: () => openDevEditor(d), right: () => startGrab(d.id, moveDevice) };
+          }),
+          { label: 'Ajouter un appareil', value: 'Créer ›', cls: 'special', ok: () => openDevEditor(null) }
+        ];
+        return { title: 'Maison', entries,
+          onInput: () => { keyTest = ''; homeChanged(); },
+          hint: grab ? `Haut et Bas pour déplacer ${(home.devices.find(d => d.id === grab.id) || {}).name || ''}, OK pour le poser.`
+            : k ? 'OK sur un appareil pour le modifier ou le tester, Droite pour le déplacer.' : 'Commence par ta clé Voice Monkey (voir le guide dans le README).' };
+      }
+      case 'homeDevice': return {
+        title: devEdit ? (devEdit.name || 'Appareil') : 'Ajouter un appareil',
+        hint: 'OK sur un champ pour écrire. « Tester » lance la routine tout de suite.',
+        entries: [
+          { field: 'hname', store: devForm, label: 'Nom (ex. Lampe salon)', maxlength: 30, caps: 'words', ok: () => focusField('hname') },
+          { field: 'hon', store: devForm, label: 'Routine pour allumer (identifiant Voice Monkey)', maxlength: 120, placeholder: 'ex. lampe-salon-on', ok: () => focusField('hon') },
+          { label: 'Tester « Allumer »', value: devTest.on || '›', ok: () => testRoutine('on') },
+          { field: 'hoff', store: devForm, label: 'Routine pour éteindre', maxlength: 120, placeholder: 'ex. lampe-salon-off', ok: () => focusField('hoff') },
+          { label: 'Tester « Éteindre »', value: devTest.off || '›', ok: () => testRoutine('off') },
+          { label: devEdit ? 'Enregistrer' : 'Ajouter l’appareil', cls: 'primary', value: '', ok: saveDevice },
+          ...(devEdit ? [{ label: confirmRemove ? 'Appuyez de nouveau sur OK pour retirer' : 'Retirer cet appareil', cls: 'danger', value: '', ok: removeDevice }] : [])
         ]
       };
       case 'cat-meteo': return {
@@ -1135,9 +1315,9 @@
       if (e.field) {
         const note = e.note ? `<span class="field-note" id="fld-note-${e.field}">${esc(e.note())}</span>` : '';
         return `<li class="${cls}" data-i="${k}"><span class="field-label">${e.label}</span>
-          <input id="fld-${e.field}" type="${e.field === 'link' ? 'url' : 'text'}" maxlength="${e.field === 'name' ? 30 : 300}"
+          <input id="fld-${e.field}" type="${e.inputType || (e.field === 'link' ? 'url' : 'text')}" maxlength="${e.maxlength || (e.field === 'name' ? 30 : 300)}"
             value="${esc(e.store[e.field])}" placeholder="${esc(e.placeholder || '')}" autocomplete="off"
-            autocapitalize="${e.field === 'name' ? 'words' : 'off'}" spellcheck="false">${note}</li>`;
+            autocapitalize="${e.caps || (e.field === 'name' ? 'words' : 'off')}" spellcheck="false">${note}</li>`;
       }
       return `<li class="${cls}" data-i="${k}"><span class="row-left">${e.label}</span><span class="val">${e.value ?? ''}</span></li>`;
     }).join('');

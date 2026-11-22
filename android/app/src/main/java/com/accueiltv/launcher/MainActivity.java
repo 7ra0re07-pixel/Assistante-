@@ -542,6 +542,40 @@ public class MainActivity extends Activity {
             }
         }
 
+        /**
+         * Requête vers Voice Monkey (rangée Maison) : la clé part dans l'en-tête Authorization,
+         * la réponse revient à la page par tvHttpResult(id, statut, corps).
+         * Limité au serveur de Voice Monkey.
+         */
+        @JavascriptInterface
+        public void httpGet(String id, String url, String bearer) {
+            if (url == null || !url.startsWith("https://api-v3.voicemonkey.io/")) return;
+            new Thread(() -> {
+                int status = 0;
+                String body = "";
+                try {
+                    HttpURLConnection con = (HttpURLConnection) new URL(url).openConnection();
+                    con.setConnectTimeout(10000);
+                    con.setReadTimeout(15000);
+                    if (bearer != null && !bearer.trim().isEmpty()) con.setRequestProperty("Authorization", "Bearer " + bearer.trim());
+                    status = con.getResponseCode();
+                    InputStream in = status >= 400 ? con.getErrorStream() : con.getInputStream();
+                    if (in != null) {
+                        ByteArrayOutputStream out = new ByteArrayOutputStream();
+                        byte[] buf = new byte[4096];
+                        int n;
+                        while ((n = in.read(buf)) > 0 && out.size() < 16384) out.write(buf, 0, n);
+                        in.close();
+                        body = out.toString("UTF-8");
+                    }
+                } catch (Exception e) {
+                    status = 0;
+                }
+                final String call = "window.tvHttpResult && tvHttpResult(" + JSONObject.quote(id) + "," + status + "," + JSONObject.quote(body) + ")";
+                runOnUiThread(() -> js(call));
+            }).start();
+        }
+
         /** Télécharge et installe la nouvelle version de l'appli. */
         @JavascriptInterface
         public void installUpdate(String url) {

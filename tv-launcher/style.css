@@ -497,3 +497,24 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .no-flexgap .saver-weather > * + * { margin-left: 16px; }
 .no-flexgap .wx-now > * + * { margin-left: 36px; }
 .no-flexgap .wx-meta > * { margin-right: 30px; }
+
+
+/* ---------- Rangée Maison ---------- */
+.tile-home { width: 360px; height: 202px; display: flex; flex-direction: column; justify-content: center; align-items: flex-start;
+  padding: 0 30px; text-align: left; color: var(--text);
+  background: linear-gradient(160deg, var(--card) 0%, rgba(var(--bg-rgb), .92) 100%);
+  box-shadow: inset 0 0 0 1px var(--line), 0 10px 30px rgba(0,0,0,.35); }
+.tile-home .h-icon { width: 58px; height: 58px; color: var(--muted); }
+.tile-home .h-icon svg { width: 58px; height: 58px; display: block; }
+.tile-home.on .h-icon { color: #FFC94D; }
+.tile-home.setup .h-icon { color: #6FA8FF; }
+.tile-home .h-name { font-family: var(--display); font-size: calc(30px * var(--ts)); font-weight: 600; margin-top: 12px; line-height: 1.15;
+  max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tile-home.setup .h-name { white-space: normal; font-size: calc(24px * var(--ts)); }
+.tile-home .h-act { font-size: calc(22px * var(--ts)); color: var(--muted); margin-top: 4px; }
+.tile-home.busy { opacity: .6; }
+.tile-home.busy .h-icon { animation: hpulse 900ms ease-in-out infinite alternate; }
+@keyframes hpulse { to { opacity: .35; } }
+
+/* Message d'erreur */
+.toast.error { background: #D9363E; color: #fff; max-width: 1400px; text-align: center; }
