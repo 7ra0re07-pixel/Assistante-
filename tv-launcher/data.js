@@ -28,7 +28,11 @@ window.TV_DATA = {
       desc: 'Musique et podcasts sur les enceintes de la TV.' },
     { id: 'deezer', packages: ['deezer.android.tv', 'deezer.android.app'], kind: 'music', deeplink: { scheme: 'deezer', path: 'www.deezer.com/' }, icon: 'icons/deezer.png', logo: 'logos/deezer.svg', name: 'Deezer', package: 'deezer.android.tv', url: 'https://www.deezer.com',
       colors: ['#A238FF', '#3C0F66', '#12061F'], logoColor: '#FFFFFF', logoStyle: 'bold',
-      desc: 'Votre Flow, vos playlists et des millions de titres.' }
+      desc: 'Votre Flow, vos playlists et des millions de titres.' },
+    { id: 'googleplay', kind: 'video', packages: ['com.android.vending'], deeplink: { scheme: 'https', path: 'play.google.com/store' },
+      logo: 'logos/googleplay.svg', name: 'Google Play', package: 'com.android.vending', url: 'https://play.google.com/store',
+      colors: ['#34A853', '#FFFFFF', '#E8EAED'], ambient: ['#34A853', '#1A3D6B', '#FBBC04'],
+      desc: 'Applis, jeux, films et séries pour votre TV.' }
   ],
 
   // Applis prêtes à ajouter depuis Paramètres → Ajouter une appli.
@@ -50,7 +54,7 @@ window.TV_DATA = {
       deeplink: { scheme: 'https', path: 'www.arte.tv/' }, colors: ['#FA481C', '#4A1A0E', '#160A06'],
       desc: 'Documentaires, cinéma et séries européennes.' },
     { id: 'm6plus', packages: ['fr.m6.m6replay', 'fr.m6.m6replay.by'], kind: 'video', name: 'M6+', logo: 'logos/m6plus.svg', package: 'fr.m6.m6replay', url: 'https://www.6play.fr',
-      deeplink: { scheme: 'https', path: 'www.6play.fr/' }, colors: ['#F7F700', '#F4F4F6', '#C9CAD1'],
+      deeplink: { scheme: 'https', path: 'www.6play.fr/' }, colors: ['#F7F700', '#F4F4F6', '#C9CAD1'], ambient: ['#F7F700', '#4A0F24', '#0082E6'],
       desc: 'Les programmes de M6, W9, 6ter et Gulli en direct et en replay.' },
     { id: 'appletv', packages: ['com.apple.atve.androidtv.appletv', 'com.apple.atve.amazon.appletv', 'com.apple.atve.sony.appletv'], kind: 'video', name: 'Apple TV+', logo: 'logos/appletv.svg', package: 'com.apple.atve.androidtv.appletv', url: 'https://tv.apple.com',
       deeplink: { scheme: 'https', path: 'tv.apple.com/' }, colors: ['#9AA4B2', '#2A2D33', '#0B0C0E'],

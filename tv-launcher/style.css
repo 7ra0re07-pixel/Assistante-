@@ -374,3 +374,9 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .mini .app-inst span { display: none; }
 .hero-logo .app-inst { flex-direction: row; gap: 28px; font-size: 96px; letter-spacing: -.03em; }
 .hero-logo .app-inst img { width: 140px; height: 140px; border-radius: 32px; }
+
+/* Google Play : logo officiel sur fond blanc */
+.app-logo-googleplay { width: 290px; }
+.mini .app-logo-googleplay { width: 112px; }
+.hero-logo .app-logo-googleplay { background: #FFFFFF; padding: 26px 34px; border-radius: 22px; height: 84px; box-sizing: content-box; }
+.tile-googleplay:not(.focused) { filter: brightness(.96); } /* reste blanc même sans sélection */

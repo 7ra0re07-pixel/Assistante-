@@ -59,8 +59,21 @@
     lib.items = lib.items.filter(it => it && getApp(it.id) && !seen.has(it.id) && seen.add(it.id))
       .map(it => ({ id: it.id, row: keys.includes(it.row) ? it.row : 'favoris' }));
     if (!lib.items.length) lib.items = D.apps.map(a => ({ id: a.id, row: 'favoris' }));
+    // Nouvelles applis par défaut : ajoutées une seule fois à la fin des Favoris
+    // (si vous les retirez ensuite, elles ne reviennent pas).
+    lib.added = Array.isArray(lib.added) ? lib.added : [];
+    NEW_DEFAULTS.forEach(id => {
+      if (lib.added.includes(id)) return;
+      if (!lib.items.some(it => it.id === id)) {
+        const lastFav = lib.items.map(it => it.row).lastIndexOf('favoris');
+        lib.items.splice(lastFav + 1, 0, { id, row: 'favoris' });
+      }
+      lib.added.push(id);
+    });
   }
+  const NEW_DEFAULTS = ['googleplay'];
   normalizeLib();
+  save('tv.library', lib);
   const saveLib = () => save('tv.library', lib);
   const appsInRow = (key) => lib.items.filter(it => it.row === key).map(it => getApp(it.id));
 
@@ -256,13 +269,14 @@
   }
   // logo introuvable : on affiche le nom de l'appli à la place
   window.tvLogoFallback = (img) => { const t = document.createElement('span'); t.className = 'app-logo bold'; t.style.setProperty('--logo', '#fff'); t.textContent = img.dataset.name; img.replaceWith(t); };
-  const appItem = (a) => ({ kind: 'app', id: a.id, title: a.name, source: a.id, desc: a.desc, colors: a.colors, action: `Ouvrir ${a.name}` });
+  const appItem = (a) => ({ kind: 'app', id: a.id, title: a.name, source: a.id, desc: a.desc, colors: a.ambient || a.colors, action: `Ouvrir ${a.name}` });
 
   function appTile(a) {
     const t = el('button', 'tile tile-app focusable', logoHTML(a));
     t.style.setProperty('--tc1', a.colors[0]); t.style.setProperty('--tc2', a.colors[1]); t.style.setProperty('--tc3', a.colors[2]);
     t.setAttribute('aria-label', a.name);
     if (a.custom) t.classList.add('tile-custom');
+    t.classList.add('tile-' + a.id);
     t._item = appItem(a);
     return t;
   }
