@@ -5,8 +5,11 @@ entièrement à la télécommande.
 
 - Ouvrir `index.html` dans un navigateur (ou servir le dossier :
   `python3 -m http.server 8080`).
-- Contenu modifiable dans `data.js` : applis, « Continuer à regarder »,
-  recommandations, contenu mis en avant, villes pour la météo.
+- Contenu modifiable dans `data.js` : applis par défaut, catalogue d'applis,
+  villes pour la météo.
+- Rangées : Favoris, Films & séries, Musique (vos choix), Applis récentes
+  (les dernières ouvertes depuis l'accueil) et, dans l'appli Android,
+  Installées sur cette TV.
 - Touches : flèches, OK/Entrée, Retour/Échap.
 - Bannière : met en avant une appli favorite toutes les 10 secondes
   (Gauche/Droite sur les boutons de la bannière pour changer).

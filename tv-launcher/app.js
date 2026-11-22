@@ -13,6 +13,28 @@
   const prefs = Object.assign({ cityIndex: 0, h24: true, reduceMotion: false, sounds: true, openApps: true, sleepMin: 3, displayScale: 100 }, load('tv.prefs', {}));
   const savePrefs = () => save('tv.prefs', prefs);
 
+  /* ---------- Applis installées sur la TV (appli Android uniquement) ---------- */
+  const hasBridge = () => !!(window.AndroidTV && typeof window.AndroidTV.launchApp === 'function');
+  let installed = [], installedMap = {}, installedSig = '';
+  function refreshInstalled() {
+    if (!hasBridge() || typeof window.AndroidTV.getInstalledApps !== 'function') return false;
+    try {
+      const list = JSON.parse(window.AndroidTV.getInstalledApps());
+      const sig = list.map(x => x.package).join(',');
+      const changed = sig !== installedSig;
+      installed = list; installedSig = sig;
+      installedMap = Object.fromEntries(list.map(x => [x.package, x]));
+      return changed;
+    } catch { return false; }
+  }
+  const pkgsOf = (a) => (a.packages && a.packages.length ? a.packages : [a.package]).filter(Boolean);
+  const isInstalled = (a) => pkgsOf(a).some(p => installedMap[p]);
+  refreshInstalled();
+  // Appli de la TV présentée comme une tuile (bannière officielle ou icône)
+  function installedAsApp(x) {
+    return customApp({ id: 'inst-' + x.package, installed: true, name: x.name, package: x.package, color: x.color || '#2A3550' });
+  }
+
   /* ---------- Bibliothèque d'applis (enregistrée) ---------- */
   // items  : applis présentes sur l'accueil, dans l'ordre, avec leur rangée
   // custom : applis personnalisées (nom, lien ou paquet, couleur)
@@ -44,7 +66,13 @@
       textColor: luminance(c.color) > 0.45 ? '#111111' : '#FFFFFF',
       desc: c.url ? `Ouvre ${c.url.replace(/^https?:\/\//, '').replace(/\/$/, '')}` : `Appli Android ${c.package}` };
   }
-  const getApp = (id) => builtinById[id] || (lib.custom.find(c => c.id === id) && customApp(lib.custom.find(c => c.id === id)));
+  function getApp(id) {
+    if (builtinById[id]) return builtinById[id];
+    const c = lib.custom.find(x => x.id === id);
+    if (c) return customApp(c);
+    if (id.startsWith('inst-') && installedMap[id.slice(5)]) return installedAsApp(installedMap[id.slice(5)]);
+    return null;
+  }
 
   function normalizeLib() {
     if (!lib || !Array.isArray(lib.items)) {
@@ -75,25 +103,16 @@
   normalizeLib();
   save('tv.library', lib);
   const saveLib = () => save('tv.library', lib);
-  const appsInRow = (key) => lib.items.filter(it => it.row === key).map(it => getApp(it.id));
 
-  /* ---------- Applis installées sur la TV (appli Android uniquement) ---------- */
-  const hasBridge = () => !!(window.AndroidTV && typeof window.AndroidTV.launchApp === 'function');
-  let installed = [], installedMap = {}, installedSig = '';
-  function refreshInstalled() {
-    if (!hasBridge() || typeof window.AndroidTV.getInstalledApps !== 'function') return false;
-    try {
-      const list = JSON.parse(window.AndroidTV.getInstalledApps());
-      const sig = list.map(x => x.package).join(',');
-      const changed = sig !== installedSig;
-      installed = list; installedSig = sig;
-      installedMap = Object.fromEntries(list.map(x => [x.package, x]));
-      return changed;
-    } catch { return false; }
+  // Applis récentes : les dernières applis ouvertes depuis l'accueil (10 au plus)
+  let recents = load('tv.recent', []), recentsDirty = false;
+  if (!Array.isArray(recents)) recents = [];
+  function pushRecent(id) {
+    recents = [id, ...recents.filter(x => x !== id)].slice(0, 10);
+    save('tv.recent', recents); recentsDirty = true;
   }
-  const pkgsOf = (a) => (a.packages && a.packages.length ? a.packages : [a.package]).filter(Boolean);
-  const isInstalled = (a) => pkgsOf(a).some(p => installedMap[p]);
-  refreshInstalled();
+  const recentApps = () => recents.map(getApp).filter(Boolean);
+  const appsInRow = (key) => lib.items.filter(it => it.row === key).map(it => getApp(it.id));
 
   /* ---------- Mise à l'échelle 16:9 ---------- */
   // La scène fait 1920×1080 ; on la réduit pour tenir entièrement dans l'écran, puis on la centre.
@@ -249,9 +268,6 @@
   }
 
   /* ---------- Tuiles ---------- */
-  const art = (c) => `radial-gradient(circle at 78% 28%, ${c[2]} 0%, transparent 38%),
-    radial-gradient(ellipse at 15% 100%, ${c[0]} 0%, transparent 60%),
-    linear-gradient(160deg, ${c[0]} 0%, ${c[1]} 75%)`;
   function el(tag, cls, html) { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; }
 
   // Logo officiel (SVG) quand il existe, sinon logo dessiné en CSS (Netflix, YouTube)
@@ -280,20 +296,6 @@
     t._item = appItem(a);
     return t;
   }
-  function contentTile(it, wide) {
-    const a = appById[it.app];
-    const t = el('button', 'tile focusable ' + (wide ? 'tile-wide' : 'tile-poster'));
-    t.style.setProperty('--tc1', it.colors[0]);
-    t.innerHTML = `<div class="art" style="background:${art(it.colors)}"></div><div class="art-shade"></div>
-      <span class="badge"><img src="${a.icon}" alt="">${a.name}</span>
-      <div class="tile-info"><div class="tile-title">${it.title}</div>
-      ${wide ? `<div class="tile-sub">${it.sub}</div><div class="progress"><i style="width:${Math.round(it.progress * 100)}%"></i></div>` : ''}</div>`;
-    t.setAttribute('aria-label', `${it.title}, sur ${a.name}`);
-    t._item = { kind: 'content', id: it.title, title: it.title, source: it.app, desc: it.desc,
-      tags: wide ? [it.sub, it.left] : it.tags, colors: it.colors, action: wide ? 'Reprendre' : 'Regarder' };
-    return t;
-  }
-
   /* ---------- Rangées et navigation ---------- */
   let ROWS = [], NAV = [], memory = [];
   let r = 1, c = 0, focusedEl = null;
@@ -302,10 +304,10 @@
   function buildRows() {
     const rowsEl = $('rows'); rowsEl.innerHTML = '';
     ROWS = [
-      ...ROW_DEFS.map(d => ({ title: d.title, key: d.key, items: appsInRow(d.key).map(appTile) })).filter(rw => rw.items.length),
-      { title: 'Continuer à regarder', items: D.continue.map(i => contentTile(i, true)) },
-      { title: 'Recommandations', items: D.recommendations.map(i => contentTile(i, false)) }
-    ];
+      ...ROW_DEFS.map(d => ({ title: d.title, key: d.key, items: appsInRow(d.key).map(appTile) })),
+      { title: 'Applis récentes', key: 'recent', items: recentApps().map(appTile) },
+      { title: 'Installées sur cette TV', key: 'installed', items: installed.map(x => appTile(installedAsApp(x))) }
+    ].filter(rw => rw.items.length);
     ROWS.forEach(row => {
       const sec = el('section', 'row');
       sec.appendChild(el('h2', 'row-title', row.title));
@@ -451,6 +453,7 @@
   }
   function launch(a, item) {
     sound('select');
+    if (item.kind === 'app') pushRecent(a.id);
     const what = item.kind === 'app' ? a.name : `${item.title} dans ${a.name}`;
     if (hasBridge()) { // appli Android : ouverture native
       const pkgs = pkgsOf(a);
@@ -696,7 +699,6 @@
       };
     }
   }
-  const installedAsApp = (x) => customApp({ id: 'inst-' + x.package, installed: true, name: x.name, package: x.package, color: x.color || '#2A3550' });
   function mainStep(m, d) {
     if (m.toggle) { prefs[m.toggle] = !prefs[m.toggle]; m.after && m.after(); }
     else m.step(d);
@@ -972,18 +974,29 @@
     focus(1, 0, false);
   };
   // Retour dans le lanceur : la liste des applis installées a pu changer
+  function rebuildKeepFocus() {
+    recentsDirty = false;
+    const title = NAV[r] && NAV[r].title, id = focusedEl && focusedEl._item && focusedEl._item.id;
+    buildRows();
+    let nr = Math.min(r, NAV.length - 1), nc = c;
+    if (r >= 2) {
+      const i = NAV.findIndex(rw => rw.title === title);
+      if (i >= 0) { nr = i; const j = NAV[i].items.findIndex(t => t._item && t._item.id === id); nc = j >= 0 ? j : c; }
+    }
+    nc = Math.max(0, Math.min(nc, NAV[nr].items.length - 1));
+    if (layer === 'home') focus(nr, nc, false); else { r = nr; c = nc; }
+  }
   window.tvOnResume = () => {
-    if (!refreshInstalled()) return;
-    if (layer === 'settings') renderSettings();
-    buildRows(); r = Math.min(r, NAV.length - 1);
-    if (layer === 'home') focus(r, Math.min(c, NAV[r].items.length - 1), false);
+    const changed = refreshInstalled();
+    if (layer === 'settings' && changed) renderSettings();
+    if (changed || recentsDirty) rebuildKeepFocus();
   };
   window.tvToast = (msg) => toast(msg);
 
   // Retour depuis une appli ouverte : on reprend la bannière et la veille
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) { clearTimeout(rotTimer); clearTimeout(idleTimer); }
-    else { resetIdle(); restartRotation(); }
+    else { resetIdle(); restartRotation(); if (recentsDirty) rebuildKeepFocus(); }
   });
 
   /* ---------- Démarrage ---------- */
