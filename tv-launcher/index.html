@@ -23,12 +23,12 @@
         <span class="date" id="date"></span>
       </div>
       <div class="topbar-right">
-        <div class="weather" id="weather" title="Météo">
+        <button class="weather focusable" id="weather" aria-label="Météo détaillée">
           <span class="weather-icon" id="weatherIcon"></span>
           <span class="weather-temp" id="weatherTemp">--°</span>
           <span class="weather-city" id="weatherCity"></span>
-        </div>
-        <button class="icon-btn focusable" id="settingsBtn" data-row="0" data-col="0" aria-label="Paramètres">
+        </button>
+        <button class="icon-btn focusable" id="settingsBtn" aria-label="Paramètres">
           <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
         </button>
       </div>
@@ -38,15 +38,17 @@
       <section class="hero" id="hero">
         <div class="hero-text" id="heroText">
           <div class="hero-meta"><p class="hero-source" id="heroSource"></p><div class="hero-tags" id="heroTags"></div></div>
+          <div class="hero-logo" id="heroLogo" aria-hidden="true"></div>
           <h1 class="hero-title" id="heroTitle"></h1>
           <p class="hero-desc" id="heroDesc"></p>
         </div>
         <div class="hero-actions">
-          <button class="btn btn-primary focusable" id="heroPlay" data-row="1" data-col="0">
+          <button class="btn btn-primary focusable" id="heroPlay">
             <svg viewBox="0 0 24 24" width="30" height="30" fill="currentColor"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z"/></svg>
             <span id="heroPlayLabel">Regarder</span>
           </button>
-          <button class="btn btn-ghost focusable" id="heroMore" data-row="1" data-col="1">Plus d'infos</button>
+          <button class="btn btn-ghost focusable" id="heroMore">Plus d'infos</button>
+          <div class="hero-dots" id="heroDots" aria-hidden="true"></div>
         </div>
       </section>
 
@@ -56,10 +58,31 @@
 
   <!-- Panneau paramètres -->
   <aside class="settings" id="settings" aria-hidden="true">
-    <h2>Paramètres</h2>
+    <h2 id="settingsTitle">Paramètres</h2>
     <ul id="settingsList"></ul>
-    <p class="settings-hint">Flèches pour choisir, OK pour modifier, Retour pour fermer.</p>
+    <p class="settings-hint" id="settingsHint"></p>
   </aside>
+
+  <!-- Météo détaillée -->
+  <div class="details" id="weatherPanel" aria-hidden="true">
+    <div class="details-card weather-card" id="weatherCard"></div>
+  </div>
+
+  <!-- Mode veille -->
+  <div class="saver" id="saver" aria-hidden="true">
+    <div class="saver-scenes" id="saverScenes"></div>
+    <div class="saver-info" id="saverInfo">
+      <div class="saver-time" id="saverTime"></div>
+      <div class="saver-date" id="saverDate"></div>
+      <div class="saver-weather" id="saverWeather"></div>
+    </div>
+  </div>
+
+  <!-- Écran de démarrage -->
+  <div class="splash" id="splash">
+    <p class="splash-greeting" id="splashGreeting"></p>
+    <p class="splash-sub" id="splashSub"></p>
+  </div>
 
   <!-- Fiche détail -->
   <div class="details" id="details" aria-hidden="true">

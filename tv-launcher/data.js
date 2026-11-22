@@ -1,27 +1,31 @@
 /* Contenu de l'accueil. Modifiez librement ce fichier. */
 window.TV_DATA = {
-  // package = identifiant Android TV (utilisé quand l'interface tourne comme lanceur)
-  // url     = repli quand on est dans un simple navigateur
+  // Prénom affiché sur l'écran de démarrage (« Bonsoir Mambi »)
+  userName: 'Mambi',
+
+  // package  = identifiant de l'appli Android TV
+  // deeplink = lien profond ouvert via intent:// dans le navigateur de la TV
+  // url      = site web de secours si l'appli n'est pas installée
   apps: [
-    { id: 'netflix', icon: 'icons/netflix.png', name: 'Netflix', package: 'com.netflix.ninja', url: 'https://www.netflix.com',
+    { id: 'netflix', deeplink: { scheme: 'https', path: 'www.netflix.com/browse' }, icon: 'icons/netflix.png', name: 'Netflix', package: 'com.netflix.ninja', url: 'https://www.netflix.com',
       colors: ['#E50914', '#5A0309', '#1A0204'], logoColor: '#E50914', logoStyle: 'condensed',
       desc: 'Séries, films et documentaires. Reprenez là où vous vous étiez arrêté.' },
-    { id: 'youtube', icon: 'icons/youtube.png', name: 'YouTube', package: 'com.google.android.youtube.tv', url: 'https://www.youtube.com/tv',
+    { id: 'youtube', deeplink: { scheme: 'https', path: 'www.youtube.com/' }, icon: 'icons/youtube.png', name: 'YouTube', package: 'com.google.android.youtube.tv', url: 'https://www.youtube.com/tv',
       colors: ['#FF0033', '#3A0B12', '#141414'], logoColor: '#FFFFFF', logoStyle: 'play',
       desc: 'Vidéos, musique et chaînes que vous suivez.' },
-    { id: 'prime', icon: 'icons/prime.png', logo: 'logos/prime.svg', name: 'Prime Video', package: 'com.amazon.amazonvideo.livingroom', url: 'https://www.primevideo.com',
+    { id: 'prime', deeplink: { scheme: 'https', path: 'www.primevideo.com/' }, icon: 'icons/prime.png', logo: 'logos/prime.svg', name: 'Prime Video', package: 'com.amazon.amazonvideo.livingroom', url: 'https://www.primevideo.com',
       colors: ['#1A98FF', '#1A8CFF', '#0A4FB8'], logoColor: '#FFFFFF', logoStyle: 'light',
       desc: 'Films, séries originales et sport en direct.' },
-    { id: 'disney', icon: 'icons/disney.png', logo: 'logos/disney.svg', name: 'Disney+', package: 'com.disney.disneyplus', url: 'https://www.disneyplus.com',
+    { id: 'disney', deeplink: { scheme: 'https', path: 'www.disneyplus.com/' }, icon: 'icons/disney.png', logo: 'logos/disney.svg', name: 'Disney+', package: 'com.disney.disneyplus', url: 'https://www.disneyplus.com',
       colors: ['#1F80E0', '#13285C', '#070D24'], logoColor: '#FFFFFF', logoStyle: 'script',
       desc: 'Disney, Pixar, Marvel, Star Wars et National Geographic.' },
-    { id: 'canal', icon: 'icons/canal.png', logo: 'logos/canal.svg', name: 'Canal+', package: 'com.canal.android.canal', url: 'https://www.canalplus.com',
+    { id: 'canal', deeplink: { scheme: 'https', path: 'www.canalplus.com/' }, icon: 'icons/canal.png', logo: 'logos/canal.svg', name: 'Canal+', package: 'com.canal.android.canal', url: 'https://www.canalplus.com',
       colors: ['#F2F2F2', '#4A4A4A', '#1C1C1C'], logoColor: '#FFFFFF', logoStyle: 'bold',
       desc: 'Chaînes en direct, cinéma, sport et replay.' },
-    { id: 'spotify', icon: 'icons/spotify.png', logo: 'logos/spotify.svg', name: 'Spotify', package: 'com.spotify.tv.android', url: 'https://open.spotify.com',
+    { id: 'spotify', deeplink: { scheme: 'spotify', path: 'home' }, icon: 'icons/spotify.png', logo: 'logos/spotify.svg', name: 'Spotify', package: 'com.spotify.tv.android', url: 'https://open.spotify.com',
       colors: ['#1ED760', '#0B4A24', '#08140D'], logoColor: '#1ED760', logoStyle: 'bold',
       desc: 'Musique et podcasts sur les enceintes de la TV.' },
-    { id: 'deezer', icon: 'icons/deezer.png', logo: 'logos/deezer.svg', name: 'Deezer', package: 'deezer.android.tv', url: 'https://www.deezer.com',
+    { id: 'deezer', deeplink: { scheme: 'deezer', path: 'www.deezer.com/' }, icon: 'icons/deezer.png', logo: 'logos/deezer.svg', name: 'Deezer', package: 'deezer.android.tv', url: 'https://www.deezer.com',
       colors: ['#A238FF', '#3C0F66', '#12061F'], logoColor: '#FFFFFF', logoStyle: 'bold',
       desc: 'Votre Flow, vos playlists et des millions de titres.' }
   ],
@@ -50,12 +54,6 @@ window.TV_DATA = {
     { title: 'L’Héritière', app: 'netflix', colors: ['#B0793A', '#2A1606', '#F4D9B0'], desc: 'Une saga familiale entre Lyon et Buenos Aires.', tags: ['Drame', '2025'] }
   ],
 
-  featured: {
-    title: 'Les Rivages du Nord', source: 'netflix',
-    desc: 'Sur une île balayée par les vents, une gardienne de phare découvre que les naufrages ne doivent rien au hasard. Nouvelle saison disponible.',
-    tags: ['Thriller', 'Saison 2', '16+'], action: 'Reprendre',
-    colors: ['#2E6F8E', '#0E2A3B', '#C7A46B']
-  },
 
   cities: [
     { name: 'Paris', lat: 48.8566, lon: 2.3522 },

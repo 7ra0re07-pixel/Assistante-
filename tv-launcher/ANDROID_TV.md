@@ -18,8 +18,21 @@ existe, elle l'utilise. Sinon, elle ouvre le site web de l'appli.
 2. Les flèches et le bouton OK de la télécommande fonctionnent directement.
    Le bouton Retour ferme les panneaux ouverts.
 
-> Le navigateur de la TV ne peut pas ouvrir les applis natives. Il ouvre leur
-> site web à la place. C'est l'appli Android ci-dessous qui débloque ça.
+### Ouverture des applis depuis le navigateur
+
+Sur une TV Android, chaque tuile essaie d'abord d'ouvrir l'appli installée
+avec un lien `intent://` (défini par `deeplink` et `package` dans `data.js`).
+Si l'appli n'est pas installée, ou si le navigateur ne gère pas ce type de lien,
+la page ouvre le site web de l'appli au bout de 2,5 secondes.
+
+- Chrome gère les liens `intent://`. Certains navigateurs pour TV les ignorent :
+  dans ce cas, c'est le site web qui s'ouvre.
+- Le réglage **Paramètres → Ouvrir les applis installées** permet de toujours
+  ouvrir le site web à la place.
+- Si une appli précise ne s'ouvre pas, ajustez son `deeplink` dans `data.js`.
+
+L'appli Android décrite ci-dessous reste la solution la plus fiable : elle ouvre
+les applis directement, sans passer par le navigateur.
 
 ---
 
