@@ -50,6 +50,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import org.json.JSONTokener;
 
 /**
  * Lanceur Android TV : affiche l'interface web (dossier tv-launcher, copié dans l'appli)
@@ -69,6 +72,7 @@ public class MainActivity extends Activity {
     // Vrai pendant la saisie dans un champ : on ne touche pas au plein écran (cela refermerait le clavier)
     private volatile boolean typing = false;
     private PhoneInput phoneInput = null;
+    private RemoteServer remote = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -285,6 +289,52 @@ public class MainActivity extends Activity {
         }
     }
 
+    /** Télécommande téléphone : active seulement quand l'appli est ouverte. */
+    @Override
+    protected void onStart() {
+        super.onStart();
+        remote().start();
+    }
+
+    @Override
+    protected void onStop() {
+        if (remote != null) remote.stop();
+        super.onStop();
+    }
+
+    private synchronized RemoteServer remote() {
+        if (remote == null) {
+            remote = new RemoteServer(this, new RemoteServer.Host() {
+                @Override public String call(String json) { return callJs(json); }
+                @Override public void event(String kind) {
+                    runOnUiThread(() -> js("window.tvRemoteEvent && tvRemoteEvent(" + JSONObject.quote(kind) + ")"));
+                }
+            });
+        }
+        return remote;
+    }
+
+    /** Appelle tvRemote(json) dans l'interface et attend sa réponse (au plus 4 s). */
+    private String callJs(String json) {
+        final String[] out = { null };
+        final CountDownLatch done = new CountDownLatch(1);
+        runOnUiThread(() -> {
+            if (web == null) { done.countDown(); return; }
+            web.evaluateJavascript("window.tvRemote ? tvRemote(" + JSONObject.quote(json) + ") : null", v -> {
+                out[0] = v;
+                done.countDown();
+            });
+        });
+        try { done.await(4, TimeUnit.SECONDS); } catch (InterruptedException ignored) { }
+        if (out[0] == null) return null;
+        try {
+            Object v = new JSONTokener(out[0]).nextValue(); // la réponse arrive sous forme de texte JSON
+            return v instanceof String ? (String) v : null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     @Override
     protected void onPause() {
         if (web != null) web.onPause();
@@ -303,6 +353,7 @@ public class MainActivity extends Activity {
             try { ((ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE)).unregisterNetworkCallback(netCallback); } catch (Exception ignored) { }
         }
         if (phoneInput != null) phoneInput.stop();
+        if (remote != null) remote.stop();
         if (web != null) web.destroy();
         super.onDestroy();
     }
@@ -532,6 +583,19 @@ public class MainActivity extends Activity {
             }
             return phoneInput.start(formJson);
         }
+
+        /** Télécommande téléphone : état (adresse, code, téléphones appairés). */
+        @JavascriptInterface
+        public String remoteInfo() { return remote().info(); }
+
+        @JavascriptInterface
+        public void remoteSetEnabled(boolean on) { remote().setEnabled(on); }
+
+        @JavascriptInterface
+        public String remoteNewCode() { return remote().newCode(); }
+
+        @JavascriptInterface
+        public void remoteForget() { remote().forgetPhones(); }
 
         @JavascriptInterface
         public void stopPhoneInput() {

@@ -22,6 +22,7 @@ L'interface web de ce dossier est aussi livrée comme une vraie appli Android TV
 | `openSystemSettings()` | ouvre les paramètres de la TV |
 | `showKeyboard()` / `hideKeyboard()` | affiche ou referme le clavier pour un champ de saisie |
 | `setTyping(vrai/faux)` | saisie en cours : le plein écran immersif est mis en pause pour ne pas refermer le clavier |
+| `remoteInfo()`, `remoteSetEnabled(oui/non)`, `remoteNewCode()`, `remoteForget()` | télécommande téléphone : serveur local (port 8080) actif quand l'appli est ouverte, appairage par code ; les commandes arrivent dans `tvRemote(json)` |
 | `startPhoneInput(formulaire)` / `stopPhoneInput()` | « Saisir depuis mon téléphone » : petite page locale (Wi-Fi), code aléatoire, usage unique, 10 min ; renvoie le texte via `tvPhoneInput(json)` |
 
   En retour, l'appli appelle `tvHandleKey('back')` (bouton Retour),

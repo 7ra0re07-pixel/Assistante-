@@ -543,3 +543,21 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .phone-steps b, .phone-url b { color: var(--text); }
 .phone-url { font-size: calc(26px * var(--ts)); color: var(--muted); word-break: break-all; max-width: none; }
 .details-card p.phone-wait { margin-top: 18px; font-size: calc(30px * var(--ts)); color: var(--accent); }
+
+/* Télécommande téléphone : badge sur la TV à chaque commande reçue */
+.remote-badge { position: fixed; z-index: 31; top: 28px; left: 50%; zoom: var(--scale, 1); display: flex; align-items: center;
+  padding: 14px 28px 14px 22px; border-radius: 40px; background: rgba(var(--bg-rgb), .88); color: var(--text);
+  box-shadow: inset 0 0 0 2px var(--accent), 0 16px 40px rgba(0,0,0,.45);
+  font-size: calc(26px * var(--ts)); font-weight: 600; opacity: 0; transform: translate(-50%, -20px);
+  transition: opacity 200ms, transform 260ms var(--ease); pointer-events: none; }
+.remote-badge.show { opacity: 1; transform: translate(-50%, 0); }
+.remote-badge svg { width: 30px; height: 30px; color: var(--accent); margin-right: 12px; flex: none; }
+/* Paramètres › Télécommande : QR code + adresse + code */
+.remote-box { display: flex; align-items: center; padding: 24px; border-radius: 24px; background: var(--glass); box-shadow: inset 0 0 0 1px var(--line); }
+.remote-box.off p { font-size: calc(26px * var(--ts)); color: var(--text-2); line-height: 1.4; }
+.remote-qr.phone-qr { width: 260px; height: 260px; margin-right: 40px; }
+.remote-text p { font-size: calc(24px * var(--ts)); color: var(--text-2); }
+.remote-text .remote-url { font-family: var(--display); font-size: calc(32px * var(--ts)); color: var(--text); font-weight: 600; margin: 6px 0 22px; }
+.remote-code { display: flex; margin-top: 10px; }
+.remote-code span { width: 72px; height: 88px; margin-right: 14px; border-radius: 16px; background: var(--field); box-shadow: inset 0 0 0 2px var(--accent);
+  display: flex; align-items: center; justify-content: center; font-family: var(--display); font-size: 52px; font-weight: 700; color: var(--text); }

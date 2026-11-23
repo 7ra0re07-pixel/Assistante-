@@ -46,6 +46,32 @@ et tous les choix sont enregistrés.
 Fonds d'écran : 40 photos Unsplash (licence libre) dans `wallpapers/`, crédits dans
 `wallpapers/CREDITS.md`. Pour l'essayer : `?veille` (écran de veille), `?nosplash`.
 
+## Télécommande sur téléphone
+
+Dans l'appli Android TV, **Paramètres › Télécommande** affiche un QR code et un code
+d'appairage à 4 chiffres.
+
+1. Connecte ton téléphone au **même Wi-Fi** que la TV et scanne le QR code
+   (ou ouvre l'adresse affichée, par exemple `http://192.168.1.20:8080`).
+2. Saisis le code à 4 chiffres : le téléphone est appairé et le reste.
+3. La page propose le pavé (Haut, Bas, Gauche, Droite, OK), **Retour** et **Accueil**,
+   tes applis, les tuiles **Maison**, et **Écrire sur la TV** : sélectionne un champ sur
+   la TV (clé Voice Monkey, ville…), tape ou colle le texte, puis **Envoyer**.
+
+Sur la TV, un petit badge en haut de l'écran signale chaque commande reçue du téléphone.
+
+Sécurité :
+- le serveur ne tourne que lorsque l'appli Accueil TV est ouverte, et seulement sur le
+  réseau local (les adresses Internet sont refusées) ;
+- sans le code d'appairage, aucune commande n'est acceptée ; après 5 codes faux, blocage
+  de 30 s, et après 20, un nouveau code est créé ;
+- **Tout oublier** dans Paramètres › Télécommande déconnecte tous les téléphones ;
+  l'interrupteur coupe complètement la télécommande.
+- La page n'est pas chiffrée (HTTP) : utilise-la uniquement sur le Wi-Fi de la maison.
+
+Limite : quand une autre appli (Netflix…) est ouverte, Accueil TV est en arrière-plan et
+la télécommande téléphone ne répond plus ; utilise alors la télécommande de la TV.
+
 ## Maison : piloter tes appareils avec Voice Monkey
 
 La rangée **Maison** affiche une tuile interrupteur par appareil : **OK** allume

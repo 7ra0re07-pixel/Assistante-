@@ -870,6 +870,7 @@
     { key: 'accueil', label: 'Accueil', icon: svg('<path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/>') },
     { key: 'applis', label: 'Applis', icon: svg('<rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/>') },
     { key: 'maison', label: 'Maison', icon: svg('<path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.3 1.1 2.2h5c0-.9.4-1.6 1.1-2.2A6 6 0 0 0 12 3z"/>') },
+    { key: 'telecommande', label: 'Télécommande', icon: svg('<rect x="6" y="2" width="12" height="20" rx="3"/><path d="M11 18h2"/>') },
     { key: 'meteo', label: 'Météo', icon: svg('<path d="M7 18h10a4 4 0 0 0 .4-8 6 6 0 0 0-11.5 1.5A3.3 3.3 0 0 0 7 18z"/>') },
     { key: 'affichage', label: 'Affichage', icon: svg('<rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/>') },
     { key: 'veille', label: 'Veille', icon: svg('<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>') },
@@ -1121,6 +1122,31 @@
           ...(hasBridge() ? [] : [tog('Ouvrir les applis installées (navigateur)', 'openApps')])
         ]
       };
+      case 'cat-telecommande': {
+        if (!remoteSupported()) return { title: 'Télécommande téléphone', hint: '',
+          entries: [{ header: true, label: 'La télécommande téléphone fonctionne dans l’appli Android TV.' }] };
+        const info = remoteInfo();
+        const flip = () => { window.AndroidTV.remoteSetEnabled(!info.enabled); toast(info.enabled ? 'Télécommande téléphone désactivée' : 'Télécommande téléphone activée'); };
+        return {
+          title: 'Télécommande téléphone',
+          preview: () => remotePreview(remoteInfo()),
+          onLeave: () => { remoteForgetConfirm = false; },
+          hint: info.enabled ? 'Sur le téléphone : scanne le QR code, puis saisis le code. Un téléphone appairé le reste.' : '',
+          entries: [
+            { label: 'Télécommande téléphone', value: switchHTML(info.enabled), ok: flip, right: flip },
+            ...(info.enabled ? [
+              { label: 'Nouveau code d’appairage', value: `${esc(info.code)} ›`, ok: () => { window.AndroidTV.remoteNewCode(); toast('Nouveau code d’appairage créé'); } },
+              { label: `Téléphones appairés : ${info.paired}`, cls: remoteForgetConfirm ? 'danger' : '',
+                value: !info.paired ? '' : remoteForgetConfirm ? 'OK pour confirmer' : 'Tout oublier ›',
+                ok: () => {
+                  if (!info.paired) return sound('edge');
+                  if (!remoteForgetConfirm) { remoteForgetConfirm = true; return; }
+                  remoteForgetConfirm = false; window.AndroidTV.remoteForget(); toast('Téléphones oubliés : il faudra les appairer de nouveau');
+                } }
+            ] : [])
+          ]
+        };
+      }
       case 'cat-maison': {
         const k = home.key.trim();
         const entries = [
@@ -1424,6 +1450,111 @@
     typing = null; document.activeElement?.blur?.(); bridgeCall('hideKeyboard');
     if (fitPending) { fitPending = false; fit(); }
   }
+
+  /* ---------- Télécommande téléphone ---------- */
+  // L'appli Android sert une page sur le Wi-Fi (port 8080) ; le téléphone appairé envoie ses commandes ici.
+  const remoteSupported = () => hasBridge() && typeof window.AndroidTV.remoteInfo === 'function';
+  let remoteForgetConfirm = false;
+  function remoteInfo() {
+    try { return JSON.parse(window.AndroidTV.remoteInfo()); } catch { return { enabled: false, running: false, paired: 0, code: '' }; }
+  }
+  function remotePreview(info) {
+    if (!info.enabled) return `<div class="remote-box off"><p>Télécommande désactivée. Active-la ci-dessous pour piloter la TV depuis ton téléphone.</p></div>`;
+    if (!info.url) return `<div class="remote-box off"><p>La TV n’est pas connectée au réseau de la maison : la télécommande sera disponible dès que le Wi-Fi revient.</p></div>`;
+    let qr = '';
+    try { const q = qrcode(0, 'M'); q.addData(info.url); q.make(); qr = q.createSvgTag({ cellSize: 8, margin: 3, scalable: true }); } catch { qr = ''; }
+    return `<div class="remote-box"><div class="phone-qr remote-qr">${qr}</div>
+      <div class="remote-text"><p>Scanne ce QR code avec ton téléphone (même Wi-Fi), ou ouvre :</p>
+      <p class="remote-url">${esc(info.url)}</p>
+      <p>Code d’appairage</p><p class="remote-code">${esc(info.code).split('').map(d => `<span>${d}</span>`).join('')}</p></div></div>`;
+  }
+  // Petit badge sur la TV à chaque commande reçue du téléphone
+  let remoteBadgeTimer = 0;
+  const PHONE_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="3"/><path d="M11 18h2"/></svg>';
+  function remoteFlash(text) {
+    const b = $('remoteBadge');
+    b.innerHTML = `${PHONE_ICON}<span>${esc(text)}</span>`;
+    b.classList.remove('show'); void b.offsetWidth; b.classList.add('show');
+    clearTimeout(remoteBadgeTimer); remoteBadgeTimer = setTimeout(() => b.classList.remove('show'), 1600);
+  }
+  const KEY_NAMES = { up: 'Haut', down: 'Bas', left: 'Gauche', right: 'Droite', ok: 'OK', back: 'Retour', home: 'Accueil' };
+  const plain = (html) => String(html || '').replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim();
+  // Champ de texte visé par le téléphone : celui en cours de saisie, sinon celui sélectionné dans les paramètres
+  function remoteField() {
+    if (layer !== 'settings' || pane !== 'content') return null;
+    const def = pageDef();
+    if (typing) return def.entries.find(e => e.field === typing.field) || null;
+    const ce = currentEntry();
+    return ce && ce.field ? ce : null;
+  }
+  function remoteState() {
+    const f = remoteField();
+    return {
+      ok: true, layer, typing: !!typing,
+      field: f ? { label: plain(f.label), secret: f.inputType === 'password' } : null,
+      apps: lib.items.map(it => getApp(it.id)).filter(Boolean).map(a => ({
+        id: a.id, name: a.name, c: a.colors, logo: a.logo && !a.installed && !a.custom ? a.logo : '' })),
+      home: { ready: homeReady(), key: !!home.key.trim(),
+        devices: home.devices.filter(d => d.on || d.off).map(d => ({ id: d.id, name: d.name, state: devState(d), busy: !!homeBusy[d.id], on: !!d.on, off: !!d.off })) }
+    };
+  }
+  function remoteKey(k) {
+    if (k === 'home') { tvGoHome(); return {}; }
+    if (typing && k !== 'ok' && k !== 'back') return {}; // flèches pendant la saisie : ignorées
+    window.tvHandleKey(k);
+    if (pendingField) { // OK sur un champ : on écrit depuis le téléphone plutôt qu'avec le clavier de la TV
+      pendingField = null; clearTimeout(pendingTimer);
+      return { info: 'Champ sélectionné : écris le texte dans « Écrire sur la TV ».' };
+    }
+    return {};
+  }
+  function remoteText(text, submit) {
+    const f = remoteField();
+    if (!f) return { ok: false, error: 'Sur la TV, sélectionne d’abord un champ (clé Voice Monkey, ville…).' };
+    const v = String(text || '').slice(0, f.maxlength || (f.field === 'name' ? 30 : 300));
+    f.store[f.field] = v;
+    const inp = $('fld-' + f.field);
+    if (inp) inp.value = v;
+    const def = pageDef();
+    def.onInput && def.onInput();
+    if (typing) { if (submit) finishTyping(true); return {}; }
+    def.onTyped && def.onTyped();
+    if (submit && f.onEnter) { f.onEnter(); return {}; }
+    renderSettings();
+    return {};
+  }
+  window.tvRemote = (json) => {
+    let m;
+    try { m = JSON.parse(json); } catch { return JSON.stringify({ ok: false, error: 'Commande illisible.' }); }
+    if (m.type === 'state') return JSON.stringify(remoteState());
+    let res = {};
+    if (m.type === 'key' && KEY_NAMES[m.key]) {
+      remoteFlash(KEY_NAMES[m.key]);
+      res = remoteKey(m.key);
+    } else if (m.type === 'app') {
+      const a = getApp(String(m.id || ''));
+      if (!a || !lib.items.some(it => it.id === a.id)) res = { ok: false, error: 'Appli introuvable sur la TV.' };
+      else { if (saverOn) stopSaver(); if (splashOn) endSplash(); remoteFlash(a.name); launch(a, appItem(a)); }
+    } else if (m.type === 'home') {
+      const d = home.devices.find(x => x.id === m.id);
+      if (!d) res = { ok: false, error: 'Appareil introuvable sur la TV.' };
+      else {
+        const want = m.want === 'on' || m.want === 'off' ? m.want : (devState(d) === 'on' ? 'off' : 'on');
+        if (!(want === 'on' ? d.on : d.off)) res = { ok: false, error: `Aucune routine pour ${want === 'on' ? 'allumer' : 'éteindre'} ${d.name}.` };
+        else { remoteFlash(`${d.name} : ${want === 'on' ? 'allumer' : 'éteindre'}`); setDevice(d, want); }
+      }
+    } else if (m.type === 'text') {
+      res = remoteText(m.text, !!m.submit);
+      if (res.ok !== false) remoteFlash('Texte reçu');
+    } else res = { ok: false, error: 'Commande inconnue.' };
+    resetIdle();
+    return JSON.stringify(Object.assign({ ok: true }, res, { state: remoteState() }));
+  };
+  window.tvRemoteEvent = (kind) => {
+    if (kind === 'paired') { sound('select'); toast('Téléphone appairé : la télécommande est prête'); }
+    if (kind === 'code') toast('Trop d’essais de code : un nouveau code d’appairage a été créé.', true);
+    if (layer === 'settings' && nav.page === 'cat-telecommande') renderSettings();
+  };
 
   /* ---------- Saisir depuis mon téléphone (QR code) ---------- */
   // L'appli Android ouvre une petite page sur le Wi-Fi de la maison : rien ne passe par Internet.
