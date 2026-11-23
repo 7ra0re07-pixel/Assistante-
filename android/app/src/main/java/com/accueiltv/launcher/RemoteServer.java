@@ -67,8 +67,7 @@ class RemoteServer {
     boolean enabled() { return prefs.getBoolean("enabled", true); }
 
     void setEnabled(boolean on) {
-        prefs.edit().putBoolean("enabled", on).apply();
-        if (on) start(); else stop();
+        prefs.edit().putBoolean("enabled", on).apply(); // le service démarre ou s'arrête selon ce réglage
     }
 
     synchronized String newCode() {

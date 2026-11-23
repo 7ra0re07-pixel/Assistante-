@@ -61,16 +61,34 @@ d'appairage à 4 chiffres.
 Sur la TV, un petit badge en haut de l'écran signale chaque commande reçue du téléphone.
 
 Sécurité :
-- le serveur ne tourne que lorsque l'appli Accueil TV est ouverte, et seulement sur le
-  réseau local (les adresses Internet sont refusées) ;
+- le serveur tourne tant que la télécommande est activée (service avec notification),
+  et répond seulement sur le réseau local (les adresses Internet sont refusées) ;
 - sans le code d'appairage, aucune commande n'est acceptée ; après 5 codes faux, blocage
   de 30 s, et après 20, un nouveau code est créé ;
 - **Tout oublier** dans Paramètres › Télécommande déconnecte tous les téléphones ;
   l'interrupteur coupe complètement la télécommande.
 - La page n'est pas chiffrée (HTTP) : utilise-la uniquement sur le Wi-Fi de la maison.
 
-Limite : quand une autre appli (Netflix…) est ouverte, Accueil TV est en arrière-plan et
-la télécommande téléphone ne répond plus ; utilise alors la télécommande de la TV.
+### Accueil et Retour dans toutes les applis
+
+La télécommande reste active quand une autre appli est ouverte (Netflix, YouTube…) :
+une notification « Télécommande téléphone active » le signale sur la TV.
+
+Pour que **Accueil** et **Retour** du téléphone marchent aussi dans ces applis, active une fois
+le service d'accessibilité :
+
+1. Sur la TV, **Paramètres › Télécommande › Service d'accessibilité** (OK) : le réglage
+   **Accessibilité** de la TV s'ouvre.
+2. Choisis **Accueil TV : télécommande téléphone**, active-le et confirme.
+3. Reviens avec Retour : la ligne indique **Activé**.
+
+Si l'option est grisée (« paramètre restreint », Android 13 et plus) : Paramètres de la TV ›
+Applis › Accueil TV › menu (⋮) › **Autoriser les paramètres restreints**, puis recommence.
+Ce service ne sert qu'à appuyer sur Accueil et Retour ; il ne lit pas le contenu de l'écran.
+
+Sans lui, la page du téléphone affiche un message : Accueil et Retour ne fonctionnent alors
+que dans Accueil TV. Dans les autres applis, les flèches et OK du téléphone ne peuvent pas
+piloter l'appli ouverte (Android ne le permet pas) : utilise Accueil pour revenir.
 
 ## Maison : piloter tes appareils avec Voice Monkey
 

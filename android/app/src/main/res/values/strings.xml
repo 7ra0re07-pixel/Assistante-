@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="a11y_label">Accueil TV : télécommande téléphone</string>
+    <string name="a11y_description">Permet aux boutons Accueil et Retour de la télécommande téléphone d\'Accueil TV de fonctionner dans toutes les applis. Ce service ne lit pas le contenu de l\'écran.</string>
+</resources>

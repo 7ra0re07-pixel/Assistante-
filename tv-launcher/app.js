@@ -1135,6 +1135,21 @@
           entries: [
             { label: 'Télécommande téléphone', value: switchHTML(info.enabled), ok: flip, right: flip },
             ...(info.enabled ? [
+              { label: 'Service d’accessibilité (Accueil et Retour partout)',
+                cls: info.a11y ? '' : 'special',
+                value: info.a11y ? 'Activé' : 'Désactivé · Activer ›',
+                ok: () => {
+                  if (typeof window.AndroidTV.openAccessibilitySettings !== 'function') return sound('edge');
+                  toast('Choisis « Accueil TV : télécommande téléphone », puis active-le');
+                  window.AndroidTV.openAccessibilitySettings();
+                } },
+              ...(info.a11y ? [{ header: true, label: 'Accueil et Retour du téléphone fonctionnent aussi dans Netflix, YouTube et les autres applis.' }] : [
+                { header: true, label: 'Pour que Accueil et Retour du téléphone marchent dans toutes les applis :' },
+                { header: true, label: '1. OK sur « Service d’accessibilité » : le réglage de la TV s’ouvre (Accessibilité).' },
+                { header: true, label: '2. Choisis « Accueil TV : télécommande téléphone », active-le et confirme.' },
+                { header: true, label: '3. Reviens avec Retour : l’état passe à « Activé ». Ce service ne lit pas l’écran.' },
+                { header: true, label: 'Option grisée (« paramètre restreint ») : Paramètres de la TV › Applis › Accueil TV › menu › « Autoriser les paramètres restreints », puis recommence.' }
+              ]),
               { label: 'Nouveau code d’appairage', value: `${esc(info.code)} ›`, ok: () => { window.AndroidTV.remoteNewCode(); toast('Nouveau code d’appairage créé'); } },
               { label: `Téléphones appairés : ${info.paired}`, cls: remoteForgetConfirm ? 'danger' : '',
                 value: !info.paired ? '' : remoteForgetConfirm ? 'OK pour confirmer' : 'Tout oublier ›',
@@ -2111,7 +2126,7 @@
   }
   window.tvOnResume = () => {
     const changed = refreshInstalled();
-    if (layer === 'settings' && changed) renderSettings();
+    if (layer === 'settings' && (changed || nav.page === 'cat-telecommande')) renderSettings();
     if (changed || recentsDirty) rebuildKeepFocus();
     readNetwork();
     if (upd.state === 'installing' || upd.state === 'needperm') { upd.state = upd.remote ? 'available' : 'idle'; if (layer === 'settings') renderSettings(); }

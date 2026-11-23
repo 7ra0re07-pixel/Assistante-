@@ -72,7 +72,9 @@ public class MainActivity extends Activity {
     // Vrai pendant la saisie dans un champ : on ne touche pas au plein écran (cela refermerait le clavier)
     private volatile boolean typing = false;
     private PhoneInput phoneInput = null;
-    private RemoteServer remote = null;
+    // Télécommande téléphone : l'activité visible et son état, lus par RemoteService
+    static volatile MainActivity current = null;
+    static volatile boolean visible = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -254,7 +256,7 @@ public class MainActivity extends Activity {
                 | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
     }
 
-    private void js(String code) {
+    void js(String code) {
         if (web != null) web.evaluateJavascript(code, null);
     }
 
@@ -281,6 +283,8 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        visible = true;
+        current = this;
         hideSystemBars();
         installedCache = null; // une appli a pu être installée ou supprimée entre-temps
         if (web != null) {
@@ -289,33 +293,16 @@ public class MainActivity extends Activity {
         }
     }
 
-    /** Télécommande téléphone : active seulement quand l'appli est ouverte. */
+    /** Télécommande téléphone : démarre le service au premier plan (s'il est activé). */
     @Override
     protected void onStart() {
         super.onStart();
-        remote().start();
-    }
-
-    @Override
-    protected void onStop() {
-        if (remote != null) remote.stop();
-        super.onStop();
-    }
-
-    private synchronized RemoteServer remote() {
-        if (remote == null) {
-            remote = new RemoteServer(this, new RemoteServer.Host() {
-                @Override public String call(String json) { return callJs(json); }
-                @Override public void event(String kind) {
-                    runOnUiThread(() -> js("window.tvRemoteEvent && tvRemoteEvent(" + JSONObject.quote(kind) + ")"));
-                }
-            });
-        }
-        return remote;
+        current = this;
+        RemoteService.sync(this);
     }
 
     /** Appelle tvRemote(json) dans l'interface et attend sa réponse (au plus 4 s). */
-    private String callJs(String json) {
+    String callJs(String json) {
         final String[] out = { null };
         final CountDownLatch done = new CountDownLatch(1);
         runOnUiThread(() -> {
@@ -337,6 +324,7 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onPause() {
+        visible = false;
         if (web != null) web.onPause();
         super.onPause();
     }
@@ -353,7 +341,7 @@ public class MainActivity extends Activity {
             try { ((ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE)).unregisterNetworkCallback(netCallback); } catch (Exception ignored) { }
         }
         if (phoneInput != null) phoneInput.stop();
-        if (remote != null) remote.stop();
+        if (current == this) { current = null; visible = false; }
         if (web != null) web.destroy();
         super.onDestroy();
     }
@@ -586,16 +574,39 @@ public class MainActivity extends Activity {
 
         /** Télécommande téléphone : état (adresse, code, téléphones appairés). */
         @JavascriptInterface
-        public String remoteInfo() { return remote().info(); }
+        public String remoteInfo() {
+            try {
+                JSONObject o = new JSONObject(RemoteService.server(MainActivity.this).info());
+                o.put("a11y", RemoteService.a11yEnabled(MainActivity.this));
+                o.put("a11yNeeded", Build.VERSION.SDK_INT >= 29);
+                return o.toString();
+            } catch (Exception e) {
+                return RemoteService.server(MainActivity.this).info();
+            }
+        }
+
+        /** Ouvre les réglages d'accessibilité de la TV (pour activer « Accueil TV »). */
+        @JavascriptInterface
+        public void openAccessibilitySettings() {
+            runOnUiThread(() -> {
+                String[] actions = { Settings.ACTION_ACCESSIBILITY_SETTINGS, Settings.ACTION_SETTINGS };
+                for (String a : actions) {
+                    try { startActivity(new Intent(a).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); return; } catch (Exception ignored) { }
+                }
+            });
+        }
 
         @JavascriptInterface
-        public void remoteSetEnabled(boolean on) { remote().setEnabled(on); }
+        public void remoteSetEnabled(boolean on) {
+            RemoteService.server(MainActivity.this).setEnabled(on);
+            RemoteService.sync(MainActivity.this);
+        }
 
         @JavascriptInterface
-        public String remoteNewCode() { return remote().newCode(); }
+        public String remoteNewCode() { return RemoteService.server(MainActivity.this).newCode(); }
 
         @JavascriptInterface
-        public void remoteForget() { remote().forgetPhones(); }
+        public void remoteForget() { RemoteService.server(MainActivity.this).forgetPhones(); }
 
         @JavascriptInterface
         public void stopPhoneInput() {
